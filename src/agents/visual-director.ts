@@ -223,7 +223,8 @@ export async function runVisualDirector(
   jobPath: string,
   publicDir: string,
   slug: string,
-  genAI: GoogleGenerativeAI
+  genAI: GoogleGenerativeAI,
+  downloadedBgMusic?: string | null
 ): Promise<VisualPlan> {
   log("visual-director", "Planning visuals + generating assets...");
 
@@ -371,7 +372,7 @@ export async function runVisualDirector(
     ctaStartMs,
     thumbnailPath,
     thumbnailPrompt,
-    backgroundMusic: process.env.DEFAULT_BG_MUSIC || null,
+    backgroundMusic: downloadedBgMusic || process.env.DEFAULT_BG_MUSIC || null,
   };
 
   fs.writeFileSync(
