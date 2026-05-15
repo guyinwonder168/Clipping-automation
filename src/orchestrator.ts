@@ -7,6 +7,7 @@ import { runResearcher } from "./agents/researcher";
 import { runScriptwriter } from "./agents/scriptwriter";
 import { runVoiceProducer } from "./agents/voice-producer";
 import { runVisualDirector } from "./agents/visual-director";
+import { runAudioDownloader } from "./agents/audio-downloader";
 import { runComposer } from "./agents/composer";
 import { runReviewer } from "./agents/reviewer";
 
@@ -83,6 +84,12 @@ async function runPipeline(topic: string) {
     return;
   }
 
+  // ── Trending Background Audio ────────────────────────────────────────────
+  let trendingBgMusic: string | null = null;
+  if (state.research.trending_audio) {
+    trendingBgMusic = await runAudioDownloader(state.research, jobPath, PUBLIC_DIR, slug);
+  }
+
   // ── Revision Loop ────────────────────────────────────────────────────────
   let revisionNotes = "";
 
@@ -132,7 +139,8 @@ async function runPipeline(topic: string) {
         jobPath,
         PUBLIC_DIR,
         slug,
-        genAI
+        genAI,
+        trendingBgMusic
       );
       saveCheckpoint();
     } else {
