@@ -96,12 +96,13 @@ export const Subtitle: React.FC<SubtitleProps> = ({
         {activeChunk.map((wt, i) => {
           const isActive = frame >= wt.startFrame && frame < wt.endFrame;
           const isPast = frame >= wt.endFrame;
+          const wordColor = isActive ? HIGHLIGHT_COLOR : isPast ? "#ffffff" : "#999999";
 
           return (
             <span
               key={`${wt.startFrame}-${i}`}
               style={{
-                color: isActive ? HIGHLIGHT_COLOR : isPast ? "#ffffff" : "#999999",
+                color: wordColor,
                 fontSize: 54,
                 fontFamily: "'IBM Plex Sans', sans-serif",
                 fontWeight: 700,

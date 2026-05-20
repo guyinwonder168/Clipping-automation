@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as dotenv from "dotenv";
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 import {
   RESEARCHER_PROMPT,
   TREND_TIMER_PROMPT,
