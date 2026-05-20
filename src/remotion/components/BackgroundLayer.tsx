@@ -31,7 +31,7 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
 
   // Collect all scenes with video/image backgrounds
   const bgScenes = scenes.filter(
-    (s) => s.background && s.background.path && s.background.type !== "code-typing" && s.background.type !== "none"
+    (s) => s.background?.path && s.background.type !== "code-typing" && s.background.type !== "none"
   );
 
   if (bgScenes.length === 0) return null;
@@ -46,8 +46,6 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
 
   for (let i = 0; i < bgScenes.length; i++) {
     const scene = bgScenes[i];
-    const sceneStart = Math.round((scene.startMs / 1000) * FPS);
-    const sceneEnd = Math.round((scene.endMs / 1000) * FPS);
 
     // Extend this segment to fill gaps — start from frame 0 so hook has background too
     const prevEnd = segments.length > 0

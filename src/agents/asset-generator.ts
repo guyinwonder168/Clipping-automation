@@ -1,5 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { chromium } from "playwright";
 import { SceneAsset, log } from "../state";
 
@@ -212,7 +212,7 @@ const FALLBACK_QUERIES: Record<string, string[]> = {
 };
 
 function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[crypto.getRandomValues(new Uint32Array(1))[0] % arr.length];
 }
 
 function selectBestVideoFile(files: PexelsVideoFile[]): PexelsVideoFile | null {
@@ -223,21 +223,24 @@ function selectBestVideoFile(files: PexelsVideoFile[]): PexelsVideoFile | null {
   if (pool.length === 0) return null;
 
   // Prefer portrait (height > width) HD files
+  const byHeightDesc = (items: PexelsVideoFile[]) =>
+    [...items].sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
+
   const portraitHd = pool.filter(
     (f) => f.quality === "hd" && f.height && f.width && f.height > f.width
   );
   if (portraitHd.length > 0) {
-    return portraitHd.sort((a, b) => (b.height ?? 0) - (a.height ?? 0))[0];
+    return byHeightDesc(portraitHd)[0];
   }
 
   // Any HD file
   const hd = pool.filter((f) => f.quality === "hd" && (f.height ?? 0) >= 720);
   if (hd.length > 0) {
-    return hd.sort((a, b) => (b.height ?? 0) - (a.height ?? 0))[0];
+    return byHeightDesc(hd)[0];
   }
 
   // Fallback to highest resolution available
-  return pool.sort((a, b) => (b.height ?? 0) - (a.height ?? 0))[0];
+  return byHeightDesc(pool)[0];
 }
 
 async function pexelsFetch(
@@ -432,67 +435,74 @@ async function generateKlingVideo(
     }
 
     const taskId = submitData.data.task_id;
+    if (!taskId || !/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+      log("asset-gen", `Invalid task ID received: ${taskId}`);
+      return null;
+    }
     log("asset-gen", `Kling task: ${taskId} — polling...`);
+    const result = await pollKlingTask(taskId);
+    if (!result) return null;
 
-    // Poll for completion (max 8 minutes for 5s video)
-    const maxWait = 480_000;
-    const pollInterval = 8_000;
-    let elapsed = 0;
-
-    while (elapsed < maxWait) {
-      await new Promise((r) => setTimeout(r, pollInterval));
-      elapsed += pollInterval;
-
-      // Regenerate token in case it's close to expiry
-      const pollToken = generateKlingToken()!;
-      const resultRes = await fetch(`${KLING_BASE}/v1/videos/text2video/${taskId}`, {
-        headers: { Authorization: `Bearer ${pollToken}` },
-      });
-
-      if (!resultRes.ok) continue;
-
-      const resultData = (await resultRes.json()) as {
-        code: number;
-        data: {
-          task_status: string;
-          task_status_msg: string;
-          task_result?: { videos: { url: string; duration: string }[] };
-        };
-      };
-
-      const status = resultData.data.task_status;
-
-      if (status === "succeed" && resultData.data.task_result?.videos?.[0]) {
-        const videoUrl = resultData.data.task_result.videos[0].url;
-        log("asset-gen", `Kling video ready — downloading...`);
-
-        const videoRes = await fetch(videoUrl);
-        if (!videoRes.ok) {
-          log("asset-gen", `Download failed: ${videoRes.status}`);
-          return null;
-        }
-
-        const buffer = Buffer.from(await videoRes.arrayBuffer());
-        fs.writeFileSync(outputPath, buffer);
-        log("asset-gen", `Kling video saved: ${path.basename(outputPath)} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
-
-        return { type: "stock-video", path: path.basename(outputPath), searchQuery: prompt };
-      } else if (status === "failed") {
-        log("asset-gen", `Kling failed: ${resultData.data.task_status_msg}`);
-        return null;
-      }
-
-      if (elapsed % 30_000 === 0) {
-        log("asset-gen", `Kling still generating... (${elapsed / 1000}s)`);
-      }
+    log("asset-gen", `Kling video ready — downloading...`);
+    const videoRes = await fetch(result);
+    if (!videoRes.ok) {
+      log("asset-gen", `Download failed: ${videoRes.status}`);
+      return null;
     }
 
-    log("asset-gen", "Kling generation timed out");
-    return null;
+    const buffer = Buffer.from(await videoRes.arrayBuffer());
+    fs.writeFileSync(outputPath, buffer);
+    log("asset-gen", `Kling video saved: ${path.basename(outputPath)} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
+
+    return { type: "stock-video", path: path.basename(outputPath), searchQuery: prompt };
   } catch (err) {
     log("asset-gen", `Kling error: ${(err as Error).message}`);
     return null;
   }
+}
+
+async function pollKlingTask(taskId: string): Promise<string | null> {
+  const maxWait = 480_000;
+  const pollInterval = 8_000;
+  let elapsed = 0;
+
+  while (elapsed < maxWait) {
+    await new Promise((r) => setTimeout(r, pollInterval));
+    elapsed += pollInterval;
+
+    const pollToken = generateKlingToken()!;
+    const safeTaskId = encodeURIComponent(taskId);
+    const resultRes = await fetch(`${KLING_BASE}/v1/videos/text2video/${safeTaskId}`, {
+      headers: { Authorization: `Bearer ${pollToken}` },
+    });
+
+    if (!resultRes.ok) continue;
+
+    const resultData = (await resultRes.json()) as {
+      code: number;
+      data: {
+        task_status: string;
+        task_status_msg: string;
+        task_result?: { videos: { url: string; duration: string }[] };
+      };
+    };
+
+    const status = resultData.data.task_status;
+
+    if (status === "succeed" && resultData.data.task_result?.videos?.[0]) {
+      return resultData.data.task_result.videos[0].url;
+    } else if (status === "failed") {
+      log("asset-gen", `Kling failed: ${resultData.data.task_status_msg}`);
+      return null;
+    }
+
+    if (elapsed % 30_000 === 0) {
+      log("asset-gen", `Kling still generating... (${elapsed / 1000}s)`);
+    }
+  }
+
+  log("asset-gen", "Kling generation timed out");
+  return null;
 }
 
 export async function generateAIVideos(

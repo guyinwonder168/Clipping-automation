@@ -6,10 +6,9 @@ import {
   staticFile,
   useCurrentFrame,
   useVideoConfig,
-  spring,
   interpolate,
 } from "remotion";
-import { PALETTES, TemplateProps, FPS, SAFE, CONTENT } from "./palettes";
+import { PALETTES, TemplateProps, FPS } from "./palettes";
 import { WordCaption } from "./components/WordCaption";
 import { BackgroundLayer } from "./components/BackgroundLayer";
 import { ProgressBar } from "./components/ProgressBar";
@@ -28,17 +27,11 @@ export const TemplateA: React.FC<TemplateProps> = ({
   const p = PALETTES[colorPalette];
   const totalFrames = duration * FPS;
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   const hookFrames = 3 * FPS;
-  const ctaStart = ctaStartMs
+  const ctaStartFrame = ctaStartMs
     ? Math.round((ctaStartMs / 1000) * FPS)
     : totalFrames - 4 * FPS;
-
-  // Check if we have video backgrounds — if so, skip terminal chrome
-  const hasVideoBackgrounds = (scenes ?? []).some(
-    (s) => s.background?.type === "stock-video" && s.background?.path
-  );
 
   // Fade to black at end
   const endFade = interpolate(

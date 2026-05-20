@@ -1,5 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { WordTiming, VoiceProducerOutput, log } from "../state";
 
 const VOICE_ID = "TX3LPaxmHKxFdv7VOQHJ"; // Liam — young, energetic, punchy

@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { ResearchOutput, log } from "../state";
+import { ResearchOutput, TrendingAudio, log } from "../state";
 import { callClaudeJSON } from "./llm";
 
 
@@ -20,6 +20,7 @@ interface TikTokVideoItem {
   statistics: TikTokVideoStats;
   video?: { duration: number };
   author?: { uniqueId: string; nickname: string; follower_count: number };
+  music?: TikTokMusic;
 }
 
 interface KeywordSearchResponse {
@@ -30,6 +31,23 @@ interface KeywordSearchResponse {
 interface HashtagSearchResponse {
   aweme_list: TikTokVideoItem[] | null;
   cursor: number;
+}
+
+interface TikTokMusic {
+  title?: string;
+  author?: string;
+  id_str?: string;
+  duration?: number;
+  play_url?: {
+    url_list?: string[];
+  };
+}
+
+interface VideoInfoResponse {
+  aweme_detail?: {
+    music?: TikTokMusic;
+    added_sound_music_info?: TikTokMusic;
+  };
 }
 
 // ── ScrapeCreators API helpers ──────────────────────────────────────────────
@@ -87,6 +105,31 @@ async function getVideoTranscript(videoUrl: string): Promise<string | null> {
     language: "en",
   });
   return data?.transcript ?? null;
+}
+
+async function getVideoMusic(awemeId: string): Promise<TikTokMusic | null> {
+  const data = await scrapeFetch<VideoInfoResponse>("/v2/tiktok/video", {
+    id: awemeId,
+  });
+  return data?.aweme_detail?.added_sound_music_info ?? data?.aweme_detail?.music ?? null;
+}
+
+function buildTrendingAudio(videoId: string, music: TikTokMusic | null): TrendingAudio | null {
+  const songTitle = music?.title?.trim();
+  const songAuthor = music?.author?.trim();
+  const soundId = music?.id_str?.trim();
+
+  if (!songTitle || !songAuthor) {
+    return null;
+  }
+
+  return {
+    video_id: videoId,
+    song_title: songTitle,
+    song_author: songAuthor,
+    sound_id: soundId ?? null,
+    search_query: `${songTitle} ${songAuthor} audio`,
+  };
 }
 
 // ── Analysis helpers ────────────────────────────────────────────────────────
@@ -246,9 +289,24 @@ export async function runResearcher(
   // ── Step 2: Pre-process data for LLM ──────────────────────────────────────
 
   // Sort by play count, take top 30
-  const topVideos = videos
+  const topVideos = [...videos]
     .sort((a, b) => (b.statistics?.play_count ?? 0) - (a.statistics?.play_count ?? 0))
     .slice(0, 30);
+
+  let trendingAudio: TrendingAudio | null = null;
+  if (topVideos[0]?.aweme_id) {
+    const inlineMusic = topVideos[0].music;
+    const music =
+      inlineMusic?.title && inlineMusic?.author
+        ? inlineMusic
+        : await getVideoMusic(topVideos[0].aweme_id);
+    trendingAudio = buildTrendingAudio(topVideos[0].aweme_id, music);
+    if (trendingAudio) {
+      log("researcher", `Trending audio: ${trendingAudio.song_title} — ${trendingAudio.song_author}`);
+    } else {
+      log("researcher", "No trending audio metadata found for top video");
+    }
+  }
 
   // Extract hooks and score them
   const videoAnalysis = topVideos.map((v) => {
@@ -280,15 +338,14 @@ export async function runResearcher(
       hashtagCounts.set(tag.toLowerCase(), (hashtagCounts.get(tag.toLowerCase()) ?? 0) + 1);
     }
   }
-  const topHashtags = Array.from(hashtagCounts.entries())
+  const topHashtags = [...hashtagCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15)
     .map(([tag]) => tag);
 
   // Try to get transcript of the top video for hook analysis
-  let topTranscript: string | null = null;
   if (topVideos[0]?.aweme_id) {
-    topTranscript = await getVideoTranscript(
+    await getVideoTranscript(
       `https://www.tiktok.com/@${topVideos[0].author?.uniqueId ?? "user"}/video/${topVideos[0].aweme_id}`
     );
   }
@@ -296,7 +353,7 @@ export async function runResearcher(
   // ── Step 3: LLM analysis of real data ─────────────────────────────────────
 
   // Slim payload — only send top 5 hooks + aggregate stats to avoid hitting content filters
-  const topHooks = videoAnalysis
+  const topHooks = [...videoAnalysis]
     .sort((a, b) => b.hookScore - a.hookScore)
     .slice(0, 5)
     .map((v) => ({ hook: v.hook, score: v.hookScore, views: v.views, duration: v.duration }));
@@ -318,6 +375,7 @@ export async function runResearcher(
   const userPrompt = `Analyze this TikTok trend data for "${topic}" and produce your research output. Keep top_hooks to 3 entries max and keep all string fields concise:\n\n${JSON.stringify(dataPayload, null, 2)}`;
 
   const parsed = await callClaudeJSON<ResearchOutput>(ANALYSIS_SYSTEM, userPrompt, "researcher");
+  parsed.trending_audio = trendingAudio;
 
   // Force GO when no real TikTok data — LLM can't reliably judge trends without data
   if (videos.length === 0 && parsed.trend_decision === "PIVOT") {
@@ -328,6 +386,4 @@ export async function runResearcher(
 
   log("researcher", `Done — ${parsed.trend_decision} (${parsed.urgency}) | ${videos.length} real videos analyzed`);
   return parsed;
-
-  throw new Error("Researcher failed after 3 attempts");
 }

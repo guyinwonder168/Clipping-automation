@@ -1,5 +1,5 @@
 import React from "react";
-import { useCurrentFrame, useVideoConfig, spring, interpolate, Sequence } from "remotion";
+import { useCurrentFrame, useVideoConfig, spring, Sequence } from "remotion";
 import { createTikTokStyleCaptions } from "@remotion/captions";
 
 interface WordTiming {

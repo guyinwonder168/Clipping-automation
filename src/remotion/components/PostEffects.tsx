@@ -1,6 +1,5 @@
 import React from "react";
-import { useCurrentFrame, useVideoConfig, interpolate } from "remotion";
-import { FPS } from "../palettes";
+import { useCurrentFrame } from "remotion";
 
 /**
  * Film grain overlay — adds subtle texture to mask stock footage look

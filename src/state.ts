@@ -8,6 +8,14 @@ export interface WordTiming {
 
 // ── Agent 1: Researcher ──────────────────────────────────────────────────────
 
+export interface TrendingAudio {
+  video_id: string;
+  song_title: string;
+  song_author: string;
+  sound_id: string | null;
+  search_query: string;
+}
+
 export interface ResearchOutput {
   topic: string;
   trend_status: "rising" | "peak" | "saturated";
@@ -26,6 +34,7 @@ export interface ResearchOutput {
   trend_reason: string;
   urgency: "normal" | "post within 6hrs" | "post within 2hrs";
   pivot_angles: string[] | null;
+  trending_audio: TrendingAudio | null;
 }
 
 // ── Agent 2: Scriptwriter ────────────────────────────────────────────────────

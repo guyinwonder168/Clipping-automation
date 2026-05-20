@@ -1,5 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   ScriptOutput,
@@ -184,8 +184,9 @@ async function uploadVideoToGemini(videoPath: string): Promise<{ uri: string; mi
 
     while (fileState === "PROCESSING" && attempts < 30) {
       await new Promise((r) => setTimeout(r, 2000));
+      const safeFileName = encodeURIComponent(fileName ?? "");
       const statusRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/files/${fileName}?key=${apiKey}`
+        `https://generativelanguage.googleapis.com/v1beta/files/${safeFileName}?key=${apiKey}`
       );
       if (statusRes.ok) {
         const status = (await statusRes.json()) as { state: string };
@@ -272,12 +273,14 @@ export async function runReviewer(
   const contentParts: any[] = [];
 
   if (videoFile) {
-    contentParts.push({
-      fileData: { mimeType: videoFile.mimeType, fileUri: videoFile.uri },
-    });
-    contentParts.push({
-      text: `WATCH this video carefully. Then review it using the metadata below.\n\nMETADATA:\n${JSON.stringify(metadataContext, null, 2)}`,
-    });
+    contentParts.push(
+      {
+        fileData: { mimeType: videoFile.mimeType, fileUri: videoFile.uri },
+      },
+      {
+        text: `WATCH this video carefully. Then review it using the metadata below.\n\nMETADATA:\n${JSON.stringify(metadataContext, null, 2)}`,
+      }
+    );
     log("reviewer", "Reviewing with VIDEO + metadata (multimodal)");
   } else {
     contentParts.push({
@@ -290,16 +293,18 @@ export async function runReviewer(
   if (fs.existsSync(thumbnailPath)) {
     try {
       const thumbBuffer = fs.readFileSync(thumbnailPath);
-      contentParts.push({
-        text: "\n\nHere is the thumbnail image — evaluate it for readability, contrast, and CTR potential:",
-      });
-      // @ts-ignore — inline data part
-      contentParts.push({
-        inlineData: {
-          mimeType: "image/png",
-          data: thumbBuffer.toString("base64"),
+      contentParts.push(
+        {
+          text: "\n\nHere is the thumbnail image — evaluate it for readability, contrast, and CTR potential:",
         },
-      });
+        // @ts-ignore — inline data part
+        {
+          inlineData: {
+            mimeType: "image/png",
+            data: thumbBuffer.toString("base64"),
+          },
+        }
+      );
     } catch {
       // Thumbnail read failed, skip
     }
