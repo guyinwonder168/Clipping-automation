@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  AbsoluteFill,
-  Sequence,
-  Audio,
-  staticFile,
-  useCurrentFrame,
-  useVideoConfig,
-  interpolate,
-} from "remotion";
+import { AbsoluteFill, Audio, staticFile, useCurrentFrame, interpolate } from "remotion";
 import { PALETTES, TemplateProps, FPS } from "./palettes";
 import { WordCaption } from "./components/WordCaption";
 import { BackgroundLayer } from "./components/BackgroundLayer";
@@ -29,9 +21,6 @@ export const TemplateA: React.FC<TemplateProps> = ({
   const frame = useCurrentFrame();
 
   const hookFrames = 3 * FPS;
-  const ctaStartFrame = ctaStartMs
-    ? Math.round((ctaStartMs / 1000) * FPS)
-    : totalFrames - 4 * FPS;
 
   // Fade to black at end
   const endFade = interpolate(

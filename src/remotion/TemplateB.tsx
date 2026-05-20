@@ -121,7 +121,7 @@ export const TemplateB: React.FC<TemplateProps> = ({
         if (startFrame < hookFrames || startFrame >= ctaStart) return null;
 
         return (
-          <Sequence key={i} from={startFrame} durationInFrames={dur}>
+          <Sequence key={scene.startMs} from={startFrame} durationInFrames={dur}>
             <StatCard
               text={scene.overlayText}
               index={i}

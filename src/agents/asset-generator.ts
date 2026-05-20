@@ -444,7 +444,8 @@ async function generateKlingVideo(
     if (!result) return null;
 
     log("asset-gen", `Kling video ready — downloading...`);
-    const videoRes = await fetch(result);
+    const downloadUrl = new URL(result);
+    const videoRes = await fetch(downloadUrl.toString());
     if (!videoRes.ok) {
       log("asset-gen", `Download failed: ${videoRes.status}`);
       return null;

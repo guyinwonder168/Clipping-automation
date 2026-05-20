@@ -27,8 +27,6 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
   accentColor,
   bgColor,
 }) => {
-  const frame = useCurrentFrame();
-
   // Collect all scenes with video/image backgrounds
   const bgScenes = scenes.filter(
     (s) => s.background?.path && s.background.type !== "code-typing" && s.background.type !== "none"
@@ -97,7 +95,7 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
         const isVideo = bg.type === "stock-video";
 
         return (
-          <Sequence key={i} from={seg.startFrame} durationInFrames={seg.durationFrames}>
+          <Sequence key={seg.startFrame} from={seg.startFrame} durationInFrames={seg.durationFrames}>
             <CrossfadeSegment
               isVideo={isVideo}
               path={bg.path}

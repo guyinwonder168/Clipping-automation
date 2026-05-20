@@ -60,7 +60,7 @@ export const WordCaption: React.FC<WordCaptionProps> = ({ wordTimings }) => {
         const durationFrames = Math.max(Math.round((page.durationMs / 1000) * 30), 1);
 
         return (
-          <Sequence key={pageIdx} from={startFrame} durationInFrames={durationFrames}>
+          <Sequence key={page.startMs} from={startFrame} durationInFrames={durationFrames}>
             <CaptionPage tokens={page.tokens} pageStartMs={page.startMs} />
           </Sequence>
         );

@@ -13,7 +13,11 @@ import {
 
 dotenv.config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const geminiKey = process.env.GEMINI_API_KEY;
+if (!geminiKey) {
+  throw new Error("GEMINI_API_KEY is required");
+}
+const genAI = new GoogleGenerativeAI(geminiKey);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,7 +92,7 @@ interface ReviewOutput {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const log = (agent: string, msg: string) =>
-  console.log(`\n[${new Date().toISOString()}] [${agent.toUpperCase()}] ${msg}`);
+  console.log(`\n[${new Date().toISOString()}] [${agent.toUpperCase()}] ${msg.slice(0, 500)}`);
 
 const slugify = (str: string) =>
   str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -143,7 +147,7 @@ async function generateVoiceover(
     {
       method: "POST",
       headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY!,
+        "xi-api-key": process.env.ELEVENLABS_API_KEY ?? "",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -315,8 +319,8 @@ async function runPipeline(topic: string) {
         THUMBNAIL_PROMPT,
         `Generate thumbnail for: "${topic}"`,
         {
-          hook: script!.script.hook_text_onscreen,
-          hook_formula: script!.hook_variants[script!.chosen_hook].formula_used,
+          hook: script.script.hook_text_onscreen,
+          hook_formula: script.hook_variants[script.chosen_hook].formula_used,
           topic,
         }
       );
@@ -332,15 +336,20 @@ async function runPipeline(topic: string) {
       );
     }
 
+    // Type narrowing: both are guaranteed set after their optional blocks
+    if (!script || !thumbnail) {
+      throw new Error("Script or thumbnail not initialized in revision loop");
+    }
+
     // Agent 5: Voiceover
     const voiceoverPath = path.join(jobPath, "voiceover.mp3");
     const voiceover = await generateVoiceover(
-      script!.script.voiceover_text,
+      script.script.voiceover_text,
       voiceoverPath
     );
 
     // Agent 6: Video Render
-    const formulaRaw = script!.hook_variants[script!.chosen_hook].formula_used
+    const formulaRaw = script.hook_variants[script.chosen_hook].formula_used
       .toUpperCase()
       .replace(/[^A-Z]/g, " ")
       .trim();
@@ -373,14 +382,14 @@ async function runPipeline(topic: string) {
     fs.copyFileSync(voiceoverPath, path.join(publicDir, voiceoverPublicName));
 
     // Get audio duration via ffprobe for accurate frame count
-    let audioDuration = script!.estimated_length_seconds;
+    let audioDuration = script.estimated_length_seconds;
     try {
       const probeResult = execSync(
         `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${voiceoverPath}"`,
         { encoding: "utf-8" }
       ).trim();
-      const parsed = parseFloat(probeResult);
-      if (!isNaN(parsed) && parsed > 0) {
+      const parsed = Number.parseFloat(probeResult);
+      if (!Number.isNaN(parsed) && parsed > 0) {
         audioDuration = Math.ceil(parsed) + 2; // +2s buffer for CTA
         log("VIDEO-RENDERER", `Audio duration: ${parsed.toFixed(1)}s → video: ${audioDuration}s`);
       }
@@ -389,7 +398,7 @@ async function runPipeline(topic: string) {
     }
 
     const renderProps = {
-      script: script!.script,
+      script: script.script,
       duration: audioDuration,
       colorPalette: "daemon",
       voiceoverSrc: voiceoverPublicName,
@@ -412,7 +421,7 @@ async function runPipeline(topic: string) {
     // Save caption
     fs.writeFileSync(
       path.join(jobPath, "caption.txt"),
-      `${script!.script.caption}\n\n${script!.script.hashtags.join(" ")}`
+      `${script.script.caption}\n\n${script.script.hashtags.join(" ")}`
     );
 
     // Agent 7: Reviewer
@@ -421,9 +430,9 @@ async function runPipeline(topic: string) {
       REVIEWER_PROMPT,
       `Review this content package for topic: "${topic}"`,
       {
-        script: script!.script,
-        hook_variants: script!.hook_variants,
-        chosen_hook: script!.chosen_hook,
+        script: script.script,
+        hook_variants: script.hook_variants,
+        chosen_hook: script.chosen_hook,
         thumbnail,
         voiceover,
         topic,

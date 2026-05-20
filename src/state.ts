@@ -134,7 +134,7 @@ export interface PipelineState {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export const log = (agent: string, msg: string) =>
-  console.log(`\n[${new Date().toISOString()}] [${agent.toUpperCase()}] ${msg}`);
+  console.log(`[${new Date().toISOString()}] [${agent.toUpperCase()}] ${msg.slice(0, 500)}`);
 
 export const slugify = (str: string) =>
   str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
