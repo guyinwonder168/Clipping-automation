@@ -28,7 +28,6 @@ export const TemplateD: React.FC<TemplateProps> = ({
   const p = PALETTES[colorPalette];
   const totalFrames = duration * FPS;
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   const hookFrames = 3 * FPS;
   const ctaStart = ctaStartMs

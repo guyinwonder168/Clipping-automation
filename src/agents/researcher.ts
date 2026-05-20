@@ -289,7 +289,7 @@ export async function runResearcher(
   // ── Step 2: Pre-process data for LLM ──────────────────────────────────────
 
   // Sort by play count, take top 30
-  const topVideos = videos
+  const topVideos = [...videos]
     .sort((a, b) => (b.statistics?.play_count ?? 0) - (a.statistics?.play_count ?? 0))
     .slice(0, 30);
 
@@ -338,15 +338,14 @@ export async function runResearcher(
       hashtagCounts.set(tag.toLowerCase(), (hashtagCounts.get(tag.toLowerCase()) ?? 0) + 1);
     }
   }
-  const topHashtags = Array.from(hashtagCounts.entries())
+  const topHashtags = [...hashtagCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15)
     .map(([tag]) => tag);
 
   // Try to get transcript of the top video for hook analysis
-  let topTranscript: string | null = null;
   if (topVideos[0]?.aweme_id) {
-    topTranscript = await getVideoTranscript(
+    await getVideoTranscript(
       `https://www.tiktok.com/@${topVideos[0].author?.uniqueId ?? "user"}/video/${topVideos[0].aweme_id}`
     );
   }
@@ -354,7 +353,7 @@ export async function runResearcher(
   // ── Step 3: LLM analysis of real data ─────────────────────────────────────
 
   // Slim payload — only send top 5 hooks + aggregate stats to avoid hitting content filters
-  const topHooks = videoAnalysis
+  const topHooks = [...videoAnalysis]
     .sort((a, b) => b.hookScore - a.hookScore)
     .slice(0, 5)
     .map((v) => ({ hook: v.hook, score: v.hookScore, views: v.views, duration: v.duration }));
@@ -387,6 +386,4 @@ export async function runResearcher(
 
   log("researcher", `Done — ${parsed.trend_decision} (${parsed.urgency}) | ${videos.length} real videos analyzed`);
   return parsed;
-
-  throw new Error("Researcher failed after 3 attempts");
 }
