@@ -119,7 +119,7 @@ function buildTrendingAudio(videoId: string, music: TikTokMusic | null): Trendin
   const songAuthor = music?.author?.trim();
   const soundId = music?.id_str?.trim();
 
-  if (!songTitle || !songAuthor || !soundId) {
+  if (!songTitle || !songAuthor) {
     return null;
   }
 
@@ -127,7 +127,7 @@ function buildTrendingAudio(videoId: string, music: TikTokMusic | null): Trendin
     video_id: videoId,
     song_title: songTitle,
     song_author: songAuthor,
-    sound_id: soundId,
+    sound_id: soundId ?? null,
     search_query: `${songTitle} ${songAuthor} audio`,
   };
 }
@@ -295,7 +295,11 @@ export async function runResearcher(
 
   let trendingAudio: TrendingAudio | null = null;
   if (topVideos[0]?.aweme_id) {
-    const music = topVideos[0].music ?? await getVideoMusic(topVideos[0].aweme_id);
+    const inlineMusic = topVideos[0].music;
+    const music =
+      inlineMusic?.title && inlineMusic?.author
+        ? inlineMusic
+        : await getVideoMusic(topVideos[0].aweme_id);
     trendingAudio = buildTrendingAudio(topVideos[0].aweme_id, music);
     if (trendingAudio) {
       log("researcher", `Trending audio: ${trendingAudio.song_title} — ${trendingAudio.song_author}`);
