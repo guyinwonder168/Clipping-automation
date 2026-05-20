@@ -12,7 +12,7 @@ export interface TrendingAudio {
   video_id: string;
   song_title: string;
   song_author: string;
-  sound_id: string;
+  sound_id: string | null;
   search_query: string;
 }
 
