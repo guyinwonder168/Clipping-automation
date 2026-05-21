@@ -452,6 +452,11 @@ async function generateKlingVideo(
       log("asset-gen", `Invalid protocol in download URL: ${downloadUrl.protocol}`);
       return null;
     }
+    const allowedHosts = ["klingai.com", "api.klingai.com", "cdn.klingai.com"];
+    if (!allowedHosts.some((h) => downloadUrl.hostname === h || downloadUrl.hostname.endsWith(`.${h}`))) {
+      log("asset-gen", `Invalid hostname in download URL: ${downloadUrl.hostname}`);
+      return null;
+    }
     const videoRes = await fetch(downloadUrl.toString());
     if (!videoRes.ok) {
       log("asset-gen", `Download failed: ${videoRes.status}`);

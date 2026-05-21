@@ -96,7 +96,12 @@ export const Subtitle: React.FC<SubtitleProps> = ({
         {activeChunk.map((wt, i) => {
           const isActive = frame >= wt.startFrame && frame < wt.endFrame;
           const isPast = frame >= wt.endFrame;
-          const wordColor = isActive ? HIGHLIGHT_COLOR : isPast ? "#ffffff" : "#999999";
+          let wordColor = "#999999";
+          if (isActive) {
+            wordColor = HIGHLIGHT_COLOR;
+          } else if (isPast) {
+            wordColor = "#ffffff";
+          }
 
           return (
             <span
