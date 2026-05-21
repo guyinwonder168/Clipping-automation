@@ -76,7 +76,7 @@ export const CodeTyping: React.FC<CodeTypingProps> = ({
           {tokens.map((token, j) => {
             const { text, color } = colorizeToken(token);
             return (
-              <span key={`${token}-${j}`} style={{ color }}>
+              <span key={`${i}-${token}-${j}`} style={{ color }}>
                 {text}
               </span>
             );

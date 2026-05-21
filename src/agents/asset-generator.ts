@@ -88,10 +88,13 @@ export async function generateSceneImage(
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${process.env.GEMINI_API_KEY}`, // NOSONAR
+      "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY ?? "",
+        },
         body: JSON.stringify({
           instances: [{ prompt }],
           parameters: { sampleCount: 1, aspectRatio: "9:16" },
