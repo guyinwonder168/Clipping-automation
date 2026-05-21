@@ -447,32 +447,26 @@ async function generateKlingVideo(
     if (!result) return null;
 
     log("asset-gen", `Kling video ready — downloading...`);
-    // Sanitize the download URL to satisfy SSRF taint analysis (S5144, S8476)
-    let downloadUrl: URL;
+    // Validate download URL — protocol + hostname allowlist to prevent SSRF.
+    // SonarCloud taint (S5144/S8476) tracks result→fetch regardless of validation;
+    // this is a known false positive. Mark as Won't Fix on SonarCloud.
+    let parsedUrl: URL;
     try {
-      downloadUrl = new URL(result);
+      parsedUrl = new URL(result);
     } catch {
-      log("asset-gen", `Invalid download URL format`);
+      log("asset-gen", "Invalid download URL format");
       return null;
     }
-    // Protocol allowlist — only https is expected from Kling
-    if (downloadUrl.protocol !== "https:") {
-      log("asset-gen", `Invalid protocol in download URL: ${downloadUrl.protocol}`);
+    if (parsedUrl.protocol !== "https:") {
+      log("asset-gen", `Invalid protocol: ${parsedUrl.protocol}`);
       return null;
     }
-    // Hostname allowlist — only klingai.com domains
     const allowedHosts = ["klingai.com", "api.klingai.com", "cdn.klingai.com"];
-    const hostname = downloadUrl.hostname;
-    const isAllowed = allowedHosts.some(
-      (h) => hostname === h || hostname.endsWith(`.${h}`)
-    );
-    if (!isAllowed) {
-      log("asset-gen", `Blocked download from disallowed host: ${hostname}`);
+    if (!allowedHosts.some((h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
+      log("asset-gen", `Blocked download from: ${parsedUrl.hostname}`);
       return null;
     }
-    // Reconstruct a clean URL from validated components to break taint chain
-    const safeUrl = `https://${hostname}${downloadUrl.pathname}${downloadUrl.search}${downloadUrl.hash}`;
-    const videoRes = await fetch(safeUrl);
+    const videoRes = await fetch(parsedUrl.href);
     if (!videoRes.ok) {
       log("asset-gen", `Download failed: ${videoRes.status}`);
       return null;
