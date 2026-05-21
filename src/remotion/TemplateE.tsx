@@ -1,19 +1,13 @@
 import React from "react";
 import {
-  AbsoluteFill,
   Sequence,
-  Html5Audio,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
   spring,
   interpolate,
 } from "remotion";
 import { PALETTES, TemplateProps, FPS } from "./palettes";
-import { CTACard } from "./components/CTACard";
-import { WordCaption } from "./components/WordCaption";
-import { BackgroundLayer } from "./components/BackgroundLayer";
-import { ProgressBar } from "./components/ProgressBar";
+import { TemplateShell } from "./components/TemplateShell";
 
 export const TemplateE: React.FC<TemplateProps> = ({
   script,
@@ -38,25 +32,21 @@ export const TemplateE: React.FC<TemplateProps> = ({
   const bgShift = interpolate(frame, [0, totalFrames], [0, 30]);
 
   return (
-    <AbsoluteFill
-      style={{
+    <TemplateShell
+      backgroundStyle={{
         background: `radial-gradient(circle at 50% ${50 + bgShift}%, ${p.accent}15 0%, ${p.bg} 70%)`,
       }}
+      voiceoverSrc={voiceoverSrc}
+      backgroundMusic={backgroundMusic}
+      scenes={scenes}
+      wordTimings={wordTimings}
+      totalFrames={totalFrames}
+      hookFrames={hookFrames}
+      ctaStart={ctaStart}
+      ctaText={script.caption}
+      accentColor={p.accent}
+      textColor={p.text}
     >
-      {voiceoverSrc && <Html5Audio src={staticFile(voiceoverSrc)} volume={1} />}
-      {backgroundMusic && (
-        <Html5Audio src={staticFile(backgroundMusic)} volume={0.12} />
-      )}
-
-      {/* Continuous background video layer */}
-      {scenes && scenes.length > 0 && (
-        <BackgroundLayer
-          scenes={scenes}
-          totalDurationFrames={totalFrames}
-          hookFrames={hookFrames}
-          ctaStartFrame={ctaStart}
-        />
-      )}
 
       {/* Hook — giant cinematic uppercase text */}
       <Sequence from={0} durationInFrames={hookFrames}>
@@ -69,38 +59,7 @@ export const TemplateE: React.FC<TemplateProps> = ({
         />
       </Sequence>
 
-      <Sequence from={ctaStart} durationInFrames={totalFrames - ctaStart}>
-        <CTACard
-          ctaText={script.caption}
-          accentColor={p.accent}
-          textColor={p.text}
-          totalDurationFrames={totalFrames - ctaStart}
-        />
-      </Sequence>
-
-      {wordTimings && wordTimings.length > 0 && <WordCaption wordTimings={wordTimings} />}
-
-      <ProgressBar totalDurationFrames={totalFrames} accentColor={p.accent} />
-
-      {/* End fade to black */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: 1080,
-          height: 1920,
-          backgroundColor: "#000",
-          opacity: 1 - interpolate(
-            frame,
-            [totalFrames - 30, totalFrames],
-            [1, 0],
-            { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-          ),
-          pointerEvents: "none",
-        }}
-      />
-    </AbsoluteFill>
+    </TemplateShell>
   );
 };
 
