@@ -2,7 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Sequence,
-  Audio,
+  Html5Audio,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -62,9 +62,9 @@ export const TemplateB: React.FC<TemplateProps> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: p.bg }}>
-      {voiceoverSrc && <Audio src={staticFile(voiceoverSrc)} volume={1} />}
+      {voiceoverSrc && <Html5Audio src={staticFile(voiceoverSrc)} volume={1} />}
       {backgroundMusic && (
-        <Audio src={staticFile(backgroundMusic)} volume={0.12} />
+        <Html5Audio src={staticFile(backgroundMusic)} volume={0.12} />
       )}
 
       {/* Continuous background video layer */}

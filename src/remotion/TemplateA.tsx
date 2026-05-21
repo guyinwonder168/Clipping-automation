@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Audio, staticFile, useCurrentFrame, interpolate } from "remotion";
+import { AbsoluteFill, Html5Audio, staticFile, useCurrentFrame, interpolate } from "remotion";
 import { PALETTES, TemplateProps, FPS } from "./palettes";
 import { WordCaption } from "./components/WordCaption";
 import { BackgroundLayer } from "./components/BackgroundLayer";
@@ -33,9 +33,9 @@ export const TemplateA: React.FC<TemplateProps> = ({
   return (
     <AbsoluteFill style={{ backgroundColor: p.bg }}>
       {/* Audio */}
-      {voiceoverSrc && <Audio src={staticFile(voiceoverSrc)} volume={1} />}
+      {voiceoverSrc && <Html5Audio src={staticFile(voiceoverSrc)} volume={1} />}
       {backgroundMusic && (
-        <Audio src={staticFile(backgroundMusic)} volume={0.12} />
+        <Html5Audio src={staticFile(backgroundMusic)} volume={0.12} />
       )}
 
       {/* Continuous background video layer */}

@@ -2,7 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Sequence,
-  Audio,
+  Html5Audio,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -49,9 +49,9 @@ export const TemplateC: React.FC<TemplateProps> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: p.bg }}>
-      {voiceoverSrc && <Audio src={staticFile(voiceoverSrc)} volume={1} />}
+      {voiceoverSrc && <Html5Audio src={staticFile(voiceoverSrc)} volume={1} />}
       {backgroundMusic && (
-        <Audio src={staticFile(backgroundMusic)} volume={0.12} />
+        <Html5Audio src={staticFile(backgroundMusic)} volume={0.12} />
       )}
 
       {/* Continuous background video layer */}
@@ -89,7 +89,7 @@ export const TemplateC: React.FC<TemplateProps> = ({
           </p>
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
             {[280, 200, 320, 160].map((w, idx) => (
-              <div key={idx} style={{
+              <div key={`before-${w}-${idx}`} style={{
                 height: 16,
                 width: w,
                 backgroundColor: "#333",
@@ -127,7 +127,7 @@ export const TemplateC: React.FC<TemplateProps> = ({
           </p>
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-end" }}>
             {[280, 200, 320, 160].map((w, idx) => (
-              <div key={idx} style={{
+              <div key={`after-${w}-${idx}`} style={{
                 height: 16,
                 width: w,
                 backgroundColor: p.accent,

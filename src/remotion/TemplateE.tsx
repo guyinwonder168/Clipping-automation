@@ -2,7 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Sequence,
-  Audio,
+  Html5Audio,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -43,9 +43,9 @@ export const TemplateE: React.FC<TemplateProps> = ({
         background: `radial-gradient(circle at 50% ${50 + bgShift}%, ${p.accent}15 0%, ${p.bg} 70%)`,
       }}
     >
-      {voiceoverSrc && <Audio src={staticFile(voiceoverSrc)} volume={1} />}
+      {voiceoverSrc && <Html5Audio src={staticFile(voiceoverSrc)} volume={1} />}
       {backgroundMusic && (
-        <Audio src={staticFile(backgroundMusic)} volume={0.12} />
+        <Html5Audio src={staticFile(backgroundMusic)} volume={0.12} />
       )}
 
       {/* Continuous background video layer */}
