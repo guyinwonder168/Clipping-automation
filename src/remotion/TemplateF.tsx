@@ -1,7 +1,7 @@
 import React from "react";
 import {
   AbsoluteFill,
-  Audio,
+  Html5Audio,
   staticFile,
   useCurrentFrame,
   interpolate,
@@ -27,9 +27,9 @@ export const TemplateF: React.FC<TemplateProps> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0a0a0a" }}>
-      {voiceoverSrc && <Audio src={staticFile(voiceoverSrc)} volume={1} />}
+      {voiceoverSrc && <Html5Audio src={staticFile(voiceoverSrc)} volume={1} />}
       {backgroundMusic && (
-        <Audio src={staticFile(backgroundMusic)} volume={0.12} />
+        <Html5Audio src={staticFile(backgroundMusic)} volume={0.12} />
       )}
 
       {scenes && scenes.length > 0 && (
@@ -38,8 +38,6 @@ export const TemplateF: React.FC<TemplateProps> = ({
           totalDurationFrames={totalFrames}
           hookFrames={0}
           ctaStartFrame={totalFrames}
-          accentColor={p.accent}
-          bgColor={p.bg}
         />
       )}
 

@@ -133,8 +133,14 @@ export interface PipelineState {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-export const log = (agent: string, msg: string) =>
-  console.log(`\n[${new Date().toISOString()}] [${agent.toUpperCase()}] ${msg}`);
+const sanitizeForLog = (value: string) =>
+  value.replace(/[\r\n\u2028\u2029]/g, " ").slice(0, 500);
+
+export const log = (agent: string, msg: string) => {
+  const safeAgent = sanitizeForLog(agent).toUpperCase();
+  const safeMessage = sanitizeForLog(msg);
+  console.log(`[${new Date().toISOString()}] [${safeAgent}] ${safeMessage}`);
+};
 
 export const slugify = (str: string) =>
   str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");

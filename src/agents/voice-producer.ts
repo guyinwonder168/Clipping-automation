@@ -91,8 +91,8 @@ export async function runVoiceProducer(
         text: voiceoverText,
         model_id: "eleven_v3",
         voice_settings: {
-          stability: 0.40,
-          similarity_boost: 0.80,
+          stability: 0.4,
+          similarity_boost: 0.8,
           style: 0.35,
           speed: 1.05,
           use_speaker_boost: true,

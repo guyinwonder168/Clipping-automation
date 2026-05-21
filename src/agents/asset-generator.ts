@@ -88,10 +88,13 @@ export async function generateSceneImage(
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${process.env.GEMINI_API_KEY}`,
+      "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY ?? "",
+        },
         body: JSON.stringify({
           instances: [{ prompt }],
           parameters: { sampleCount: 1, aspectRatio: "9:16" },
@@ -321,7 +324,7 @@ export async function searchPexelsVideo(
 
   // Last resort — use a random tech fallback
   if (!data?.videos?.length) {
-    const techFallback = TECH_FALLBACKS[Math.floor(Math.random() * TECH_FALLBACKS.length)];
+    const techFallback = pickRandom(TECH_FALLBACKS);
     log("asset-gen", `All fallbacks failed for "${query}", using tech default: "${techFallback}"`);
     data = await pexelsFetch(
       buildSearchUrl({ ...searchOpts, query: techFallback }),
@@ -444,7 +447,26 @@ async function generateKlingVideo(
     if (!result) return null;
 
     log("asset-gen", `Kling video ready — downloading...`);
-    const videoRes = await fetch(result);
+    // Validate download URL — protocol + hostname allowlist to prevent SSRF.
+    // SonarCloud taint (S5144/S8476) tracks result→fetch regardless of validation;
+    // this is a known false positive. Mark as Won't Fix on SonarCloud.
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(result);
+    } catch {
+      log("asset-gen", "Invalid download URL format");
+      return null;
+    }
+    if (parsedUrl.protocol !== "https:") {
+      log("asset-gen", `Invalid protocol: ${parsedUrl.protocol}`);
+      return null;
+    }
+    const allowedHosts = ["klingai.com", "api.klingai.com", "cdn.klingai.com"];
+    if (!allowedHosts.some((h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
+      log("asset-gen", `Blocked download from: ${parsedUrl.hostname}`);
+      return null;
+    }
+    const videoRes = await fetch(parsedUrl.href);
     if (!videoRes.ok) {
       log("asset-gen", `Download failed: ${videoRes.status}`);
       return null;

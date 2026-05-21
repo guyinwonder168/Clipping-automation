@@ -13,7 +13,11 @@ import { runReviewer } from "./agents/reviewer";
 
 dotenv.config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const geminiKey = process.env.GEMINI_API_KEY;
+if (!geminiKey) {
+  throw new Error("GEMINI_API_KEY is required");
+}
+const genAI = new GoogleGenerativeAI(geminiKey);
 const PROJECT_ROOT = process.cwd();
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public");
 const MAX_REVISIONS = 2;
@@ -101,7 +105,11 @@ async function runPipeline(topic: string) {
       state.review?.revision_target === "both";
 
     if (needsScript) {
-      state.script = await runScriptwriter(topic, state.research!, genAI, revisionNotes || undefined);
+      if (!state.research) {
+        log("pipeline", "No research data available for scriptwriting");
+        return;
+      }
+      state.script = await runScriptwriter(topic, state.research, genAI, revisionNotes || undefined);
       fs.writeFileSync(
         path.join(jobPath, "script.json"),
         JSON.stringify(state.script, null, 2)

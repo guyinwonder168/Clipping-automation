@@ -1,19 +1,13 @@
 import React from "react";
 import {
-  AbsoluteFill,
   Sequence,
-  Audio,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
   spring,
   interpolate,
 } from "remotion";
 import { PALETTES, TemplateProps, FPS, CONTENT } from "./palettes";
-import { CTACard } from "./components/CTACard";
-import { WordCaption } from "./components/WordCaption";
-import { BackgroundLayer } from "./components/BackgroundLayer";
-import { ProgressBar } from "./components/ProgressBar";
+import { TemplateShell } from "./components/TemplateShell";
 
 
 export const TemplateB: React.FC<TemplateProps> = ({
@@ -61,23 +55,19 @@ export const TemplateB: React.FC<TemplateProps> = ({
     : 0;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: p.bg }}>
-      {voiceoverSrc && <Audio src={staticFile(voiceoverSrc)} volume={1} />}
-      {backgroundMusic && (
-        <Audio src={staticFile(backgroundMusic)} volume={0.12} />
-      )}
-
-      {/* Continuous background video layer */}
-      {scenes && scenes.length > 0 && (
-        <BackgroundLayer
-          scenes={scenes}
-          totalDurationFrames={totalFrames}
-          hookFrames={hookFrames}
-          ctaStartFrame={ctaStart}
-          accentColor={p.accent}
-          bgColor={p.bg}
-        />
-      )}
+    <TemplateShell
+      backgroundStyle={{ backgroundColor: p.bg }}
+      voiceoverSrc={voiceoverSrc}
+      backgroundMusic={backgroundMusic}
+      scenes={scenes}
+      wordTimings={wordTimings}
+      totalFrames={totalFrames}
+      hookFrames={hookFrames}
+      ctaStart={ctaStart}
+      ctaText={script.caption}
+      accentColor={p.accent}
+      textColor={p.text}
+    >
 
       {/* Hook — big stat number */}
       <Sequence from={0} durationInFrames={hookFrames}>
@@ -121,7 +111,7 @@ export const TemplateB: React.FC<TemplateProps> = ({
         if (startFrame < hookFrames || startFrame >= ctaStart) return null;
 
         return (
-          <Sequence key={i} from={startFrame} durationInFrames={dur}>
+          <Sequence key={`${scene.startMs}-${i}`} from={startFrame} durationInFrames={dur}>
             <StatCard
               text={scene.overlayText}
               index={i}
@@ -133,39 +123,7 @@ export const TemplateB: React.FC<TemplateProps> = ({
         );
       })}
 
-      {/* CTA */}
-      <Sequence from={ctaStart} durationInFrames={totalFrames - ctaStart}>
-        <CTACard
-          ctaText={script.caption}
-          accentColor={p.accent}
-          textColor={p.text}
-          totalDurationFrames={totalFrames - ctaStart}
-        />
-      </Sequence>
-
-      {wordTimings && wordTimings.length > 0 && <WordCaption wordTimings={wordTimings} />}
-
-      <ProgressBar totalDurationFrames={totalFrames} accentColor={p.accent} />
-
-      {/* End fade to black */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: 1080,
-          height: 1920,
-          backgroundColor: "#000",
-          opacity: 1 - interpolate(
-            frame,
-            [totalFrames - 30, totalFrames],
-            [1, 0],
-            { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-          ),
-          pointerEvents: "none",
-        }}
-      />
-    </AbsoluteFill>
+    </TemplateShell>
   );
 };
 

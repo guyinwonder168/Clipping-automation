@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
-import { execFileSync } from "child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import { ResearchOutput, log } from "../state";
 
 const SCRAPECREATORS_BASE = "https://api.scrapecreators.com";
@@ -48,6 +48,11 @@ async function fetchTikTokAudioUrl(videoId: string): Promise<string | null> {
 }
 
 async function downloadFile(url: string, targetPath: string): Promise<void> {
+  const parsedUrl = new URL(url);
+  if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+    throw new Error(`Invalid protocol in download URL: ${parsedUrl.protocol}`);
+  }
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Download failed ${res.status}: ${res.statusText}`);
