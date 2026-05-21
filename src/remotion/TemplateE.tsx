@@ -55,8 +55,6 @@ export const TemplateE: React.FC<TemplateProps> = ({
           totalDurationFrames={totalFrames}
           hookFrames={hookFrames}
           ctaStartFrame={ctaStart}
-          accentColor={p.accent}
-          bgColor={p.bg}
         />
       )}
 

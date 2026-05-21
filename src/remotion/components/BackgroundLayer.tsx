@@ -15,8 +15,6 @@ interface BackgroundLayerProps {
   totalDurationFrames: number;
   hookFrames: number;
   ctaStartFrame: number;
-  accentColor: string;
-  bgColor: string;
 }
 
 export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
@@ -24,8 +22,6 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
   totalDurationFrames,
   hookFrames,
   ctaStartFrame,
-  accentColor,
-  bgColor,
 }) => {
   // Collect all scenes with video/image backgrounds
   const bgScenes = scenes.filter(
@@ -95,7 +91,7 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
         const isVideo = bg.type === "stock-video";
 
         return (
-          <Sequence key={seg.startFrame} from={seg.startFrame} durationInFrames={seg.durationFrames}>
+          <Sequence key={`${seg.startFrame}-${i}`} from={seg.startFrame} durationInFrames={seg.durationFrames}>
             <CrossfadeSegment
               isVideo={isVideo}
               path={bg.path}

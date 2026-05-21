@@ -48,8 +48,6 @@ export const TemplateD: React.FC<TemplateProps> = ({
           totalDurationFrames={totalFrames}
           hookFrames={hookFrames}
           ctaStartFrame={ctaStart}
-          accentColor={p.accent}
-          bgColor={p.bg}
         />
       )}
 
@@ -64,7 +62,7 @@ export const TemplateD: React.FC<TemplateProps> = ({
         const itemNumber = (scenes?.length ?? 0) - i;
 
         return (
-          <Sequence key={scene.startMs} from={startFrame} durationInFrames={dur}>
+          <Sequence key={`${scene.startMs}-${i}`} from={startFrame} durationInFrames={dur}>
             <CountdownItem
               number={itemNumber}
               text={scene.overlayText}

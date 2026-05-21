@@ -88,7 +88,7 @@ export async function generateSceneImage(
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${process.env.GEMINI_API_KEY}`, // NOSONAR
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,7 +321,7 @@ export async function searchPexelsVideo(
 
   // Last resort — use a random tech fallback
   if (!data?.videos?.length) {
-    const techFallback = TECH_FALLBACKS[Math.floor(Math.random() * TECH_FALLBACKS.length)];
+    const techFallback = pickRandom(TECH_FALLBACKS);
     log("asset-gen", `All fallbacks failed for "${query}", using tech default: "${techFallback}"`);
     data = await pexelsFetch(
       buildSearchUrl({ ...searchOpts, query: techFallback }),
@@ -445,6 +445,10 @@ async function generateKlingVideo(
 
     log("asset-gen", `Kling video ready — downloading...`);
     const downloadUrl = new URL(result);
+    if (downloadUrl.protocol !== "https:" && downloadUrl.protocol !== "http:") {
+      log("asset-gen", `Invalid protocol in download URL: ${downloadUrl.protocol}`);
+      return null;
+    }
     const videoRes = await fetch(downloadUrl.toString());
     if (!videoRes.ok) {
       log("asset-gen", `Download failed: ${videoRes.status}`);

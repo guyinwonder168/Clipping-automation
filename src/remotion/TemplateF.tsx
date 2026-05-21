@@ -38,8 +38,6 @@ export const TemplateF: React.FC<TemplateProps> = ({
           totalDurationFrames={totalFrames}
           hookFrames={0}
           ctaStartFrame={totalFrames}
-          accentColor={p.accent}
-          bgColor={p.bg}
         />
       )}
 
