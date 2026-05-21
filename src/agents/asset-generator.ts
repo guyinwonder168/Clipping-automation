@@ -447,17 +447,32 @@ async function generateKlingVideo(
     if (!result) return null;
 
     log("asset-gen", `Kling video ready — downloading...`);
-    const downloadUrl = new URL(result);
-    if (downloadUrl.protocol !== "https:" && downloadUrl.protocol !== "http:") {
+    // Sanitize the download URL to satisfy SSRF taint analysis (S5144, S8476)
+    let downloadUrl: URL;
+    try {
+      downloadUrl = new URL(result);
+    } catch {
+      log("asset-gen", `Invalid download URL format`);
+      return null;
+    }
+    // Protocol allowlist — only https is expected from Kling
+    if (downloadUrl.protocol !== "https:") {
       log("asset-gen", `Invalid protocol in download URL: ${downloadUrl.protocol}`);
       return null;
     }
+    // Hostname allowlist — only klingai.com domains
     const allowedHosts = ["klingai.com", "api.klingai.com", "cdn.klingai.com"];
-    if (!allowedHosts.some((h) => downloadUrl.hostname === h || downloadUrl.hostname.endsWith(`.${h}`))) {
-      log("asset-gen", `Invalid hostname in download URL: ${downloadUrl.hostname}`);
+    const hostname = downloadUrl.hostname;
+    const isAllowed = allowedHosts.some(
+      (h) => hostname === h || hostname.endsWith(`.${h}`)
+    );
+    if (!isAllowed) {
+      log("asset-gen", `Blocked download from disallowed host: ${hostname}`);
       return null;
     }
-    const videoRes = await fetch(downloadUrl.toString());
+    // Reconstruct a clean URL from validated components to break taint chain
+    const safeUrl = `https://${hostname}${downloadUrl.pathname}${downloadUrl.search}${downloadUrl.hash}`;
+    const videoRes = await fetch(safeUrl);
     if (!videoRes.ok) {
       log("asset-gen", `Download failed: ${videoRes.status}`);
       return null;
