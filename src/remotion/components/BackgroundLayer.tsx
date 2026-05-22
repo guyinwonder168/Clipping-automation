@@ -8,6 +8,7 @@ import {
   useCurrentFrame,
   interpolate,
 } from "remotion";
+import { Video } from "@remotion/media";
 import { ResolvedSceneProp, FPS } from "../palettes";
 
 interface BackgroundLayerProps {
@@ -132,7 +133,7 @@ const CrossfadeSegment: React.FC<{
   return (
     <AbsoluteFill style={{ opacity: fadeIn * fadeOut }}>
       {isVideo ? (
-        <OffthreadVideo
+        <Video
           src={staticFile(path)}
           muted
           style={{

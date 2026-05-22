@@ -2,15 +2,17 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ResearchOutput, ScriptOutput, log } from "../state";
 import { callClaudeJSON } from "./llm";
 
-const SYSTEM_PROMPT = `
+function getSystemPrompt(): string {
+  const audience = process.env.TARGET_AUDIENCE || "new AI coding users aged 18-30";
+  return process.env.SCRIPTWRITER_PROMPT
+    ? process.env.SCRIPTWRITER_PROMPT.replace(/\${TARGET_AUDIENCE}/g, audience)
+    : `
 You are the Scriptwriter agent. You write TikTok voiceover scripts that sound like
 a REAL PERSON talking to camera — casual, confident, slightly excited. Your audience
-is people who are NEW to AI coding (beginners discovering Claude Code, Cursor, etc).
+is ${audience}.
 
 TARGET AUDIENCE:
-- Not experienced developers. These are beginners, non-techies, and curious people.
-- They say "build an app" not "implement a solution"
-- They say "the AI broke my code" not "there's a regression"
+- ${audience}.
 - They want to feel empowered, not lectured at
 - They're scrolling TikTok, not reading docs
 
@@ -105,6 +107,7 @@ CRITICAL RULES:
 
 Output valid JSON only.
 `;
+}
 
 export async function runScriptwriter(
   topic: string,
@@ -118,7 +121,7 @@ export async function runScriptwriter(
     revisionNotes ? ` REVISION NOTES: ${revisionNotes}` : ""
   }\n\nRESEARCH CONTEXT:\n${JSON.stringify(research, null, 2)}`;
 
-  const parsed = await callClaudeJSON<ScriptOutput>(SYSTEM_PROMPT, userPrompt, "scriptwriter");
+  const parsed = await callClaudeJSON<ScriptOutput>(getSystemPrompt(), userPrompt, "scriptwriter");
   log("scriptwriter", `Done — hook: "${parsed.script.hook_text_onscreen}" (self-score: ${parsed.self_review_score})`);
   return parsed;
 }

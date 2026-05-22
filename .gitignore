@@ -31,3 +31,6 @@ Thumbs.db
 # Logs
 *.log
 
+# Lock files (users install fresh)
+pnpm-lock.yaml
+.mcp.json

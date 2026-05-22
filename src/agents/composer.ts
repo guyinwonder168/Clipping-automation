@@ -40,8 +40,8 @@ export async function runComposer(
 
   try {
     execSync(
-      `npx remotion render src/remotion/Root.tsx ${visual.templateId} "${videoOutput}" --props="${propsPath.replace(/\\/g, "/")}"`,
-      { cwd: projectRoot, stdio: "inherit", timeout: 300_000 }
+      `npx remotion render src/remotion/Root.tsx ${visual.templateId} "${videoOutput}" --props="${propsPath.replace(/\\/g, "/")}" --timeout=120000 --concurrency=2`,
+      { cwd: projectRoot, stdio: "inherit", timeout: 1_800_000 }
     );
     log("composer", `Rendered → ${videoOutput}`);
     return videoOutput;

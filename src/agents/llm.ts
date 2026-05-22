@@ -1,7 +1,7 @@
 import { log } from "../state";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "anthropic/claude-sonnet-4";
+const MODEL = "anthropic/claude-sonnet-4.5";
 
 /**
  * Call Claude via OpenRouter API.
@@ -30,6 +30,7 @@ export async function callClaude(
       model: MODEL,
       messages,
       max_tokens: maxTokens,
+      ...(json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
 

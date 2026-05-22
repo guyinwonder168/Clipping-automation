@@ -10,6 +10,7 @@ export interface WordTiming {
 
 export interface TrendingAudio {
   video_id: string;
+  video_url: string;
   song_title: string;
   song_author: string;
   sound_id: string | null;

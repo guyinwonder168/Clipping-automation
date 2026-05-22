@@ -32,7 +32,11 @@ const FORMULA_TO_TEMPLATE: Record<string, string> = {
   LIST: "CountdownList",
 };
 
-const VISUAL_PLAN_SYSTEM_PEXELS = `
+function getVisualSystemPexels(): string {
+  const audience = process.env.TARGET_AUDIENCE || "new AI coding users aged 18-30";
+  return process.env.VISUAL_DIRECTOR_PROMPT
+    ? process.env.VISUAL_DIRECTOR_PROMPT.replace(/\${TARGET_AUDIENCE}/g, audience)
+    : `
 You are the Visual Director for a TikTok content pipeline about AI coding tools.
 
 Given scene segments with voiceover text, pick a TECH-FOCUSED stock video for each.
@@ -65,8 +69,13 @@ OUTPUT JSON:
 
 Output valid JSON only. scene_assets array length must match the number of scenes.
 `;
+}
 
-const VISUAL_PLAN_SYSTEM_AI = `
+function getVisualSystemAi(): string {
+  const audience = process.env.TARGET_AUDIENCE || "new AI coding users aged 18-30";
+  return process.env.VISUAL_DIRECTOR_PROMPT_AI
+    ? process.env.VISUAL_DIRECTOR_PROMPT_AI.replace(/\${TARGET_AUDIENCE}/g, audience)
+    : `
 You are a Cinematic Director creating a shot list for an AI video generator (Kling).
 The video is a 9:16 vertical TikTok about AI coding tools for beginners.
 
@@ -120,6 +129,7 @@ OUTPUT JSON:
 Output valid JSON only. scene_assets array length must match the number of scenes.
 IMPORTANT: Generate FEWER scenes (4-6 max). Each clip will be stretched to fill its time slot.
 `;
+}
 
 function resolveScenes(
   script: ScriptOutput,
@@ -258,7 +268,7 @@ export async function runVisualDirector(
   let thumbnailPrompt = "";
 
   // Use Claude CLI for visual planning (Max subscription)
-  const visualSystemPrompt = useAIVideo ? VISUAL_PLAN_SYSTEM_AI : VISUAL_PLAN_SYSTEM_PEXELS;
+  const visualSystemPrompt = useAIVideo ? getVisualSystemAi() : getVisualSystemPexels();
   const visualUserPrompt = `Topic: "${topic}"\nHook: "${script.script.hook_text_onscreen}"\nFormula: ${formula}\nVoiceover: "${script.script.voiceover_text}"\n\nEach scene shows what the voiceover is SAYING at that moment. Pick stock video that VISUALLY MATCHES the spoken content:\n${sceneDescriptions}`;
 
   try {

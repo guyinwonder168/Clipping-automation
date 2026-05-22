@@ -25,14 +25,14 @@ interface AudioDownloaderDebug {
   searchQuery: string | null;
 }
 
-async function fetchTikTokAudioUrl(videoId: string): Promise<string | null> {
+async function fetchTikTokAudioUrl(videoUrl: string): Promise<string | null> {
   const apiKey = process.env.SCRAPECREATORS_API_KEY;
   if (!apiKey) {
     return null;
   }
 
   const url = new URL(`${SCRAPECREATORS_BASE}/v2/tiktok/video`);
-  url.searchParams.set("id", videoId);
+  url.searchParams.set("url", videoUrl);
 
   const res = await fetch(url.toString(), {
     headers: { "x-api-key": apiKey },
@@ -118,7 +118,7 @@ export async function runAudioDownloader(
   fs.mkdirSync(publicDir, { recursive: true });
 
   try {
-    const audioUrl = await fetchTikTokAudioUrl(trendingAudio.video_id);
+      const audioUrl = await fetchTikTokAudioUrl(trendingAudio.video_url);
     if (audioUrl) {
       await downloadFile(audioUrl, jobAudioPath);
       fs.copyFileSync(jobAudioPath, publicAudioPath);

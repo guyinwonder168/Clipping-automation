@@ -107,14 +107,14 @@ async function getVideoTranscript(videoUrl: string): Promise<string | null> {
   return data?.transcript ?? null;
 }
 
-async function getVideoMusic(awemeId: string): Promise<TikTokMusic | null> {
+async function getVideoMusic(videoUrl: string): Promise<TikTokMusic | null> {
   const data = await scrapeFetch<VideoInfoResponse>("/v2/tiktok/video", {
-    id: awemeId,
+    url: videoUrl,
   });
   return data?.aweme_detail?.added_sound_music_info ?? data?.aweme_detail?.music ?? null;
 }
 
-function buildTrendingAudio(videoId: string, music: TikTokMusic | null): TrendingAudio | null {
+function buildTrendingAudio(videoId: string, videoUrl: string, music: TikTokMusic | null): TrendingAudio | null {
   const songTitle = music?.title?.trim();
   const songAuthor = music?.author?.trim();
   const soundId = music?.id_str?.trim();
@@ -125,6 +125,7 @@ function buildTrendingAudio(videoId: string, music: TikTokMusic | null): Trendin
 
   return {
     video_id: videoId,
+    video_url: videoUrl,
     song_title: songTitle,
     song_author: songAuthor,
     sound_id: soundId ?? null,
@@ -192,18 +193,22 @@ function determineTrendStatus(videos: TikTokVideoItem[]): {
 
 // ── Main researcher ─────────────────────────────────────────────────────────
 
-const ANALYSIS_SYSTEM = `
+function getAnalysisSystem(): string {
+  const audience = process.env.TARGET_AUDIENCE || "new AI coding users aged 18-30";
+  return process.env.RESEARCHER_PROMPT
+    ? process.env.RESEARCHER_PROMPT.replace(/\${TARGET_AUDIENCE}/g, audience)
+    : `
 You are the Viral Researcher agent analyzing REAL TikTok data for a content pipeline
-targeting new AI coding users aged 18-30.
+targeting ${audience}.
 
 You are given REAL video data scraped from TikTok — view counts, engagement metrics,
 video descriptions, and hook extractions. This data is REAL. Do not fabricate additional data.
 
 Your job: analyze the provided data and produce a research output that will guide
-the scriptwriter to create a video with maximum viral potential.
+the scriptwriter to create a video with maximum viral potential among ${audience}.
 
 ANALYSIS TASKS:
-1. From the real hooks provided, score and rank the top 3 by viral potential
+1. From the real hooks provided, score and rank the top 3 by viral potential for ${audience}
 2. Identify patterns in what's working (format, length, hook style, topics)
 3. Determine ideal video length from the top performers
 4. Extract the best-performing hashtags from the data
@@ -234,6 +239,7 @@ DECISION LOGIC:
 
 Output valid JSON only. No markdown.
 `;
+}
 
 export async function runResearcher(
   topic: string,
@@ -295,12 +301,14 @@ export async function runResearcher(
 
   let trendingAudio: TrendingAudio | null = null;
   if (topVideos[0]?.aweme_id) {
-    const inlineMusic = topVideos[0].music;
+    const topVideo = topVideos[0];
+    const topVideoUrl = `https://www.tiktok.com/@${topVideo.author?.uniqueId ?? "user"}/video/${topVideo.aweme_id}`;
+    const inlineMusic = topVideo.music;
     const music =
       inlineMusic?.title && inlineMusic?.author
         ? inlineMusic
-        : await getVideoMusic(topVideos[0].aweme_id);
-    trendingAudio = buildTrendingAudio(topVideos[0].aweme_id, music);
+        : await getVideoMusic(topVideoUrl);
+    trendingAudio = buildTrendingAudio(topVideo.aweme_id, topVideoUrl, music);
     if (trendingAudio) {
       log("researcher", `Trending audio: ${trendingAudio.song_title} — ${trendingAudio.song_author}`);
     } else {
@@ -374,7 +382,7 @@ export async function runResearcher(
 
   const userPrompt = `Analyze this TikTok trend data for "${topic}" and produce your research output. Keep top_hooks to 3 entries max and keep all string fields concise:\n\n${JSON.stringify(dataPayload, null, 2)}`;
 
-  const parsed = await callClaudeJSON<ResearchOutput>(ANALYSIS_SYSTEM, userPrompt, "researcher");
+  const parsed = await callClaudeJSON<ResearchOutput>(getAnalysisSystem(), userPrompt, "researcher");
   parsed.trending_audio = trendingAudio;
 
   // Force GO when no real TikTok data — LLM can't reliably judge trends without data
