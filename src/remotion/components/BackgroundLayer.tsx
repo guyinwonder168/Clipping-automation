@@ -2,7 +2,6 @@ import React from "react";
 import {
   AbsoluteFill,
   Img,
-  OffthreadVideo,
   Sequence,
   staticFile,
   useCurrentFrame,
