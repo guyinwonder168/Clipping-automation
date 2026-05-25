@@ -1,3 +1,5 @@
-# Placeholder — full implementation in Task 4
-def load_config(config_path=None):
-    return {}
+"""Configuration loading and management."""
+
+from clipper_agency.config.loader import load_config
+
+__all__ = ["load_config"]
