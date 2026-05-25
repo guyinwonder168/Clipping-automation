@@ -1,6 +1,8 @@
-"""Placeholder test — ensures CI pipeline passes while real tests are built."""
+"""Smoke tests — verify basic project structure works."""
+
+import clipper_agency  # noqa: F401
 
 
-def test_placeholder():
-    """Trivial test so pytest exits 0 (instead of exit code 5)."""
-    assert True
+def test_import():
+    """Package can be imported without errors."""
+    assert clipper_agency.__version__ is not None
