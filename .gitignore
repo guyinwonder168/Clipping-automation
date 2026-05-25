@@ -10,3 +10,32 @@ assets/cache/
 *.db-shm
 .pytest_cache/
 ruff_cache/
+
+# Virtual environment
+.venv/
+
+# Auto-generated tool data
+.firecrawl/
+.memsearch/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Reference projects (local only)
+refference/
+
+# Archived docs versions
+docs/old/
+
+# Keep directory structure
+!assets/.gitkeep
+!outputs/.gitkeep
+!data/.gitkeep
