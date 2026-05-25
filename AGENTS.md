@@ -4,7 +4,7 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — no code exists yet. Only documentation.
+- **Greenfield project** — early implementation phase (Phase 0-1 complete).
 - All implementation is ahead of us.
 
 ## Python Commands
@@ -25,6 +25,73 @@ python3 -m clipper_agency  # run the app (once implemented)
 - The project path contains a space: `clipper agency`.
 - Always quote paths when needed.
 - Prefer setting the command working directory instead of using `cd` in commands.
+
+## Git Branching & PR Workflow
+
+**Never push directly to `master`.** Every phase of work must go through a branch + PR + SonarCloud gate.
+
+```
+                         Create     Push     Open      SonarCloud   Merge    Delete
+ Phase N Start ────────► branch ──► push ──► PR ────► passes? ──► PR ────► branch
+                                    │         │         │           │
+                                    │         │         └─ fix ────┘
+                                    │         │
+                                    └─────────┘
+```
+
+### Per-Phase Workflow
+
+1. **Create feature branch** — `phase/N-short-description`
+   ```bash
+   git checkout -b phase/2-database-layer
+   ```
+2. **Implement** — TDD: tests first, code, commit incrementally. Multiple commits per phase are fine.
+3. **Push branch** — `git push -u origin phase/2-database-layer`
+4. **Create PR** — via `gh pr create`:
+   ```bash
+   gh pr create --base master --title "Phase 2: Database Layer" --body "Implements database connection, schema, and queries per the implementation plan."
+   ```
+5. **Wait for SonarCloud** — PR must show ✅ green from SonarCloud Quality Gate.
+   - If SonarCloud fails (bugs, vulnerabilities, code smells), fix issues on the branch, push again, and wait for re-check.
+   - **Do NOT merge until SonarCloud passes.**
+6. **Merge** — **without squashing** (retain commit history):
+   ```bash
+   gh pr merge phase/2-database-layer --merge
+   ```
+   - Never squash or rebase-merge. Use `--merge` (true merge commit).
+7. **Delete branch** — after merge succeeds:
+   ```bash
+   git branch -d phase/2-database-layer           # local
+   git push origin --delete phase/2-database-layer  # remote
+   git checkout master && git pull origin master
+   ```
+
+### Commit Message Convention
+
+```
+feat: brief description of change
+fix: brief description of fix
+docs: brief description of doc change
+test: brief description of test change
+refactor: brief description of refactor
+```
+
+### Branch Naming
+
+```
+phase/0-scaffolding     phase/4-agent-framework   phase/8-config-prompts
+phase/1-config          phase/5-agents            phase/9-docker
+phase/2-database        phase/6-orchestrator
+phase/3-services        phase/7-dashboard
+```
+
+### Rules
+
+- ❌ NEVER push directly to `master`.
+- ❌ NEVER merge a PR before SonarCloud passes.
+- ❌ NEVER squash or rebase-merge — always use `--merge` (true merge commit).
+- ✅ Always delete the feature branch after successful merge.
+- ✅ Always pull master after deleting branch to stay in sync.
 
 ## Architecture (MVP)
 
@@ -86,9 +153,7 @@ When making a significant decision, create an ADR in `docs/adr/NNNN-title.md` fo
 | `.firecrawl/` | Auto-generated Firecrawl research outputs — do not edit |
 | `.memsearch/` | Auto-generated memsearch data directory |
 
-- No `.gitignore` exists yet in project root.
 - No `opencode.json` exists yet — this repo has no OpenCode-local config.
-- No CI/CD configured yet.
 
 ## Testing Expectations
 
