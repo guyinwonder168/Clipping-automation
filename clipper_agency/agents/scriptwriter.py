@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
+from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
 from clipper_agency.llm.client import OpenRouterClient
 
 SCRIPTWRITER_PROMPT = """You are a TikTok scriptwriter creating engaging scripts for an Indonesian artist infotainment channel.
@@ -51,12 +52,13 @@ class ScriptwriterAgent(BaseAgent):
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
 
         llm = OpenRouterClient()
+        prompt = load_prompt("scriptwriter", SCRIPTWRITER_PROMPT, PROMPTS_DIR)
         response = llm.chat(
             model="glm-4-9b",
             messages=[
                 {
                     "role": "system",
-                    "content": SCRIPTWRITER_PROMPT.format(
+                    "content": prompt.format(
                         safety_rules_text=safety_rules_text,
                     ),
                 },

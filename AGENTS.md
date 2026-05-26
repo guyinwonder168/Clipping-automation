@@ -9,15 +9,19 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Python Commands
 
-- Use `python3` for all Python commands.
+- **Use the project virtualenv first** for all Python commands when `.venv/` exists.
+- Preferred command prefix in this repo: `.venv/bin/python3 -m ...`
+- Fall back to system `python3 -m ...` only when `.venv/` does not exist.
+- This prevents false failures from missing dependencies in the system interpreter, such as `ModuleNotFoundError: flask_wtf` when the package is already installed in `.venv/`.
+- Use `python3` for all Python commands when not using the project virtualenv.
 - Do **not** use `python`; this environment may not provide it.
 - Prefer module execution when applicable:
 
 ```bash
-python3 -m pytest          # run all tests
-python3 -m pytest tests/path/test_file.py::test_name -v  # single test
-python3 -m pip install -r requirements.txt
-python3 -m clipper_agency  # run the app (once implemented)
+.venv/bin/python3 -m pytest          # run all tests
+.venv/bin/python3 -m pytest tests/path/test_file.py::test_name -v  # single test
+.venv/bin/python3 -m pip install -r requirements.txt
+.venv/bin/python3 -m clipper_agency  # run the app
 ```
 
 ## Shell Command Notes

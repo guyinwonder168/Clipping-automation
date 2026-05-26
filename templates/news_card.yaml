@@ -1,0 +1,13 @@
+name: news_card
+type: news_card
+style: headline_image_facts
+description: "Headline + image + facts + captions. Best for quick updates."
+layout:
+  resolution: 1080x1920
+  background_color: "#1a1a2e"
+  title_font_size: 56
+  subtitle_font_size: 32
+  caption_position: bottom
+  transitions:
+    type: fade
+    duration: 0.5s

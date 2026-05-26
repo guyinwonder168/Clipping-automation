@@ -1,0 +1,11 @@
+name: rapid_update
+type: rapid_update
+style: fast_cuts_punchy
+description: "Fast cuts + punchy captions. Best for trending gossip."
+layout:
+  resolution: 1080x1920
+  clip_duration: 1.5-3s
+  caption_style: punchy_centered
+  transitions:
+    type: cut
+    duration: 0s
