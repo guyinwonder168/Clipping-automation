@@ -2776,9 +2776,11 @@ git add -A && git commit -m "feat: add Output Packager (video + caption + thumbn
 
 ---
 
-## Phase 6: Orchestrator
+## Phase 6: Orchestrator ✅ COMPLETED
 
-### Task 26: Orchestrator Engine
+**Branch:** `phase/6-orchestrator` — merged to `master` via PR #8.
+
+### Task 26: Orchestrator Engine ✅
 
 **Files:**
 - Create: `clipper_agency/orchestrator/engine.py`
@@ -3003,7 +3005,7 @@ git add -A && git commit -m "feat: add Orchestrator engine with full pipeline or
 
 ---
 
-### Task 27: CLI Interface
+### Task 27: CLI Interface ✅
 
 **Files:**
 - Modify: `clipper_agency/__main__.py`

@@ -4,8 +4,8 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phase 0-5 complete).
-- All 163 tests pass. 7 agents built (Safety, Researcher, Scriptwriter, Voice Producer, Visual Director, Composer, Reviewer) + Output Packager.
+- **Greenfield project** — early implementation phase (Phase 0-6 complete).
+- All 187 tests pass. 7 agents built + Orchestrator engine + CLI interface.
 
 ## Python Commands
 
