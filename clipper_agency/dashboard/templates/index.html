@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Clipper Agency{% endblock %}
+{% block content %}
+<h1>Clipper Agency Dashboard</h1>
+<div id="summary">
+    <p>Loading...</p>
+</div>
+<script type="module">
+    const response = await fetch('/api/jobs');
+    const jobs = await response.json();
+    const total = jobs.length;
+    const completed = jobs.filter(j => j.status === 'COMPLETED').length;
+    const failed = jobs.filter(j => j.status === 'FAILED').length;
+    document.getElementById('summary').innerHTML = `
+        <p><strong>Total Jobs:</strong> ${total}</p>
+        <p><strong>Completed:</strong> ${completed}</p>
+        <p><strong>Failed:</strong> ${failed}</p>
+    `;
+</script>
+{% endblock %}
