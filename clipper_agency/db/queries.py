@@ -1,0 +1,89 @@
+"""CRUD query functions for jobs and agent states."""
+
+import json
+import sqlite3
+from typing import Any
+
+
+def create_job(conn: sqlite3.Connection, topic: str, niche: str,
+               account_id: int | None = None, template: str | None = None,
+               config_snapshot: dict | None = None) -> int:
+    """Insert a new job and return its ID."""
+    cursor = conn.execute(
+        """INSERT INTO jobs (topic, niche, account_id, template, config_snapshot)
+           VALUES (?, ?, ?, ?, ?)""",
+        (topic, niche, account_id, template,
+         json.dumps(config_snapshot) if config_snapshot is not None else None),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_job(conn: sqlite3.Connection, job_id: int) -> dict[str, Any] | None:
+    """Retrieve a job by ID."""
+    cursor = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def update_job_status(conn: sqlite3.Connection, job_id: int,
+                      status: str, error_message: str | None = None) -> None:
+    """Update a job's status."""
+    conn.execute(
+        """UPDATE jobs
+           SET status = ?, updated_at = datetime('now'),
+               error_message = COALESCE(?, error_message)
+           WHERE id = ?""",
+        (status, error_message, job_id),
+    )
+    conn.commit()
+
+
+def list_jobs(conn: sqlite3.Connection, limit: int = 50) -> list[dict[str, Any]]:
+    """List jobs ordered by created_at descending."""
+    cursor = conn.execute(
+        "SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (limit,)
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def create_agent_state(conn: sqlite3.Connection, job_id: int,
+                       agent_name: str) -> int:
+    """Insert a new agent state and return its ID."""
+    cursor = conn.execute(
+        "INSERT INTO agent_states (job_id, agent_name) VALUES (?, ?)",
+        (job_id, agent_name),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_agent_state(conn: sqlite3.Connection, job_id: int,
+                    agent_name: str) -> dict[str, Any] | None:
+    """Retrieve an agent state by job_id and agent_name."""
+    cursor = conn.execute(
+        "SELECT * FROM agent_states WHERE job_id = ? AND agent_name = ?",
+        (job_id, agent_name),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def update_agent_state(conn: sqlite3.Connection, job_id: int,
+                       agent_name: str, state: str,
+                       output_data: str | None = None,
+                       error_message: str | None = None) -> None:
+    """Update an agent state's status and optional output."""
+    if state in ("completed", "failed"):
+        completed_sql = "datetime('now')"
+    else:
+        completed_sql = "NULL"
+    conn.execute(
+        f"""UPDATE agent_states
+            SET state = ?, output_data = COALESCE(?, output_data),
+                error_message = COALESCE(?, error_message),
+                completed_at = {completed_sql}
+            WHERE job_id = ? AND agent_name = ?""",
+        (state, output_data, error_message, job_id, agent_name),
+    )
+    conn.commit()
