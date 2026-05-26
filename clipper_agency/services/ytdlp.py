@@ -52,7 +52,7 @@ class YtDlpService:
                 return None
 
             # yt-dlp may add extensions to the filename
-            files = list(out.parent.glob(f"{out.stem}*"))
+            files = list(out.parent.glob(f"{out.stem}.*"))
             if files:
                 return DownloadResult(path=str(files[0]))
 
