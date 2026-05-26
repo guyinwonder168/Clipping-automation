@@ -15,7 +15,7 @@ class ScrapeCreatorsService:
         self.api_key = os.getenv("SCRAPECREATORS_API_KEY")
 
     def search_tiktok_videos(
-        self, query: str, max_results: int = 5
+        self, query: str,
     ) -> list[dict[str, Any]]:
         """Search TikTok for videos matching the query.
 

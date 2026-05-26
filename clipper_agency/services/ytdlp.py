@@ -22,7 +22,6 @@ class YtDlpService:
         self,
         url: str,
         output_path: str,
-        max_duration: int = 30,
     ) -> Optional[DownloadResult]:
         """Download a video from a URL.
 
