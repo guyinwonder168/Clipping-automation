@@ -35,7 +35,7 @@ def test_app_config_defaults():
 def test_agent_llm_config():
     cfg = AgentLLMConfig(model="glm-4-9b", temperature=0.3)
     assert cfg.model == "glm-4-9b"
-    assert cfg.temperature == 0.3
+    assert cfg.temperature == pytest.approx(0.3)
 
 
 # --- Task 5: Config Hierarchy ---

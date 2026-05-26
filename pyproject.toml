@@ -29,6 +29,11 @@ markers = [
     "integration: marks integration tests (deselect with '-m \"not integration\"')",
 ]
 
+[tool.coverage.run]
+relative_files = true
+source = ["clipper_agency"]
+branch = true
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
