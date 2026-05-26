@@ -495,9 +495,9 @@ git add -A && git commit -m "feat: add config hierarchy with override resolution
 
 ---
 
-## Phase 2: Database Layer
+## Phase 2: Database Layer ✅ COMPLETED
 
-### Task 6: Database Connection
+### Task 6: Database Connection ✅
 
 **Files:**
 - Create: `clipper_agency/db/__init__.py`
@@ -595,7 +595,7 @@ git add -A && git commit -m "feat: add SQLite connection with WAL mode"
 
 ---
 
-### Task 7: Database Schema
+### Task 7: Database Schema ✅
 
 **Files:**
 - Create: `clipper_agency/db/schema.py`
@@ -842,7 +842,7 @@ git add -A && git commit -m "feat: add database schema (15 tables)"
 
 ---
 
-### Task 8: Database Queries
+### Task 8: Database Queries ✅
 
 **Files:**
 - Create: `clipper_agency/db/queries.py`
@@ -960,7 +960,7 @@ def update_job_status(conn: sqlite3.Connection, job_id: int,
 
 def list_jobs(conn: sqlite3.Connection, limit: int = 50) -> list[dict[str, Any]]:
     cursor = conn.execute(
-        "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+        "SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (limit,),
     )
     return [dict(row) for row in cursor.fetchall()]
 
@@ -1011,6 +1011,10 @@ Expected: 5 passed
 ```bash
 git add -A && git commit -m "feat: add database queries (CRUD for jobs and agent states)"
 ```
+
+> **Implementation note:** `list_jobs` uses `ORDER BY id DESC` instead of `ORDER BY created_at DESC`. SQLite's `datetime('now')` has second granularity, causing identical timestamps for rapid sequential inserts. Auto-incrementing `id` is always unique and correctly ordered.
+
+**Branch:** `phase/2-database-layer` — pushed, PR #4 open, awaiting SonarCloud gate.
 
 ---
 
