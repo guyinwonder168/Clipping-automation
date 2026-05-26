@@ -4,8 +4,8 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phase 0-7 complete with bug fixes).
-- All 238 tests pass (85%+ line coverage). 7 agents built + Orchestrator engine + CLI interface + Web dashboard.
+- **Greenfield project** — early implementation phase (Phase 0-8 complete with bug fixes).
+- All 248 tests pass (85%+ line coverage). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files.
 
 ## Python Commands
 

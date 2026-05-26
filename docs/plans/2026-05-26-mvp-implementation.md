@@ -3316,47 +3316,46 @@ git add -A && git commit -m "feat: add web dashboard with basic auth and job lis
 
 ---
 
-## Phase 8: Configuration & Prompts
+## Phase 8: Configuration & Prompts ✅ COMPLETED
 
-### Task 29: Niche Config YAML
+### Task 29: Niche Config YAML ✅
 
 **Files:**
 - Create: `niches/indonesian_artists.yaml`
 
 ```yaml
-niche:
-  name: indonesian_artists
-  language: id
-  tone: casual_tiktok
-  video_length:
-    target: 30
-    hard_limit: 60
-  voice:
-    provider: elevenlabs
-    default_voice_id: ""  # Configure via env ELEVENLABS_VOICE_ID
-  thumbnail:
-    template: headline_frame
-    resolution: 1080x1920
-  content_angle: trending_artist_update
-  safety_rules:
-    - no_defamation
-    - mark_rumors_as_unconfirmed
-    - soft_wording_for_unverified
-  caption_style: short_with_hashtags
-  max_hashtags: 5
-  search_terms:
-    - viral
-    - ramai dibahas
-    - klarifikasi
-    - gosip
-    - trending
+name: indonesian_artists
+language: id
+tone: casual_tiktok
+video_length:
+  target: 30
+  hard_limit: 60
+voice:
+  provider: elevenlabs
+  default_voice_id: ""  # Configure via env ELEVENLABS_VOICE_ID
+thumbnail:
+  template: headline_frame
+  resolution: 1080x1920
+content_angle: trending_artist_update
+safety_rules:
+  - no_defamation
+  - mark_rumors_as_unconfirmed
+  - soft_wording_for_unverified
+caption_style: short_with_hashtags
+max_hashtags: 5
+search_terms:
+  - viral
+  - ramai dibahas
+  - klarifikasi
+  - gosip
+  - trending
 ```
 
 Commit: `git add -A && git commit -m "feat: add Indonesian artists niche config"`
 
 ---
 
-### Task 30: Template Configs
+### Task 30: Template Configs ✅
 
 **Files:**
 - Create: `templates/news_card.yaml`
@@ -3366,6 +3365,7 @@ Commit: `git add -A && git commit -m "feat: add Indonesian artists niche config"
 ```yaml
 # templates/news_card.yaml
 name: news_card
+type: news_card
 style: headline_image_facts
 description: "Headline + image + facts + captions. Best for quick updates."
 layout:
@@ -3382,6 +3382,7 @@ layout:
 ```yaml
 # templates/b_roll_narration.yaml
 name: b_roll_narration
+type: b_roll_narration
 style: voiceover_clips_captions
 description: "Voiceover + clips + dynamic captions. Best for context-rich stories."
 layout:
@@ -3396,6 +3397,7 @@ layout:
 ```yaml
 # templates/rapid_update.yaml
 name: rapid_update
+type: rapid_update
 style: fast_cuts_punchy
 description: "Fast cuts + punchy captions. Best for trending gossip."
 layout:
@@ -3411,7 +3413,7 @@ Commit: `git add -A && git commit -m "feat: add 3 video template configs"`
 
 ---
 
-### Task 31: Prompt Files
+### Task 31: Prompt Files ✅
 
 **Files:**
 - Create: `prompts/safety.txt`
