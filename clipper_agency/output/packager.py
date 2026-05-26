@@ -2,6 +2,7 @@
 
 import json
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +49,7 @@ class OutputPackager:
             # Write metadata
             full_metadata = {
                 "job_id": job_id,
-                "created_at": "2026-05-27",
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 **metadata,
             }
             meta_file.write_text(json.dumps(full_metadata, indent=2))

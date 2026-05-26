@@ -58,10 +58,12 @@ class VisualDirectorAgent(BaseAgent):
                 })
                 url_idx += 1
             elif pexels_idx < len(pexels_videos):
+                video = pexels_videos[pexels_idx]
+                video_url = video["video_files"][0]["link"] if video.get("video_files") else ""
                 plan.append({
                     "scene": scene["scene"],
                     "source": "pexels",
-                    "url": pexels_videos[pexels_idx]["url"],
+                    "url": video_url,
                     "duration": scene.get("duration", 5),
                 })
                 pexels_idx += 1

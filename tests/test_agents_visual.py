@@ -25,8 +25,8 @@ class TestVisualDirectorPlanScenes:
         ]
         urls = ["https://tiktok.com/v/1"]
         pexels = [
-            {"id": 1, "url": "https://pexels.com/v/1"},
-            {"id": 2, "url": "https://pexels.com/v/2"},
+            {"id": 1, "video_files": [{"link": "https://video.pexels.com/1.mp4"}]},
+            {"id": 2, "video_files": [{"link": "https://video.pexels.com/2.mp4"}]},
         ]
         plan = agent._plan_scenes(scenes, urls, pexels)
         assert len(plan) == 3
@@ -35,11 +35,12 @@ class TestVisualDirectorPlanScenes:
         assert plan[0]["url"] == "https://tiktok.com/v/1"
         for i in range(1, 3):
             assert plan[i]["source"] == "pexels"
+            assert plan[i]["url"].startswith("https://video.pexels.com/")
 
     def test_plan_scenes_all_pexels_when_no_urls(self):
         agent = VisualDirectorAgent()
         scenes = [{"scene": 1, "text": "Intro", "duration": 3}]
-        pexels = [{"id": 1, "url": "https://pexels.com/v/1"}]
+        pexels = [{"id": 1, "video_files": [{"link": "https://video.pexels.com/1.mp4"}]}]
         plan = agent._plan_scenes(scenes, [], pexels)
         assert plan[0]["source"] == "pexels"
 
@@ -56,8 +57,8 @@ class TestVisualDirectorExecute:
         mocker.patch(
             "clipper_agency.services.pexels.PexelsService.search_videos",
             return_value=[
-                {"id": 1, "url": "https://pexels.com/v/1"},
-                {"id": 2, "url": "https://pexels.com/v/2"},
+                {"id": 1, "video_files": [{"link": "https://video.pexels.com/1.mp4"}]},
+                {"id": 2, "video_files": [{"link": "https://video.pexels.com/2.mp4"}]},
             ],
         )
         mocker.patch(
@@ -87,7 +88,7 @@ class TestVisualDirectorExecute:
         mock_search = mocker.patch(
             "clipper_agency.services.pexels.PexelsService.search_videos",
             return_value=[
-                {"id": 1, "url": "https://pexels.com/v/1"},
+                {"id": 1, "video_files": [{"link": "https://video.pexels.com/1.mp4"}]},
             ],
         )
         mocker.patch(
