@@ -71,5 +71,7 @@ def api_create_job():
 
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 5000) -> None:
-    """Start the dashboard server."""
-    app.run(host=host, port=port, debug=False)
+    """Start the dashboard server (development only — use WSGI server in production)."""
+    from werkzeug.serving import run_simple
+
+    run_simple(host, port, app, use_debugger=False, use_reloader=False)
