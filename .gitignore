@@ -10,6 +10,8 @@ assets/cache/
 *.db-shm
 .pytest_cache/
 ruff_cache/
+coverage.xml
+.coverage
 
 # Virtual environment
 .venv/
