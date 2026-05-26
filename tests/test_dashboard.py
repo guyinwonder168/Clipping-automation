@@ -2,12 +2,15 @@
 
 import base64
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from clipper_agency.dashboard.auth import authenticate, check_auth, requires_auth
 from clipper_agency.dashboard.app import app as dash_app
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # Test credentials
 TEST_USER = "admin"
@@ -165,3 +168,21 @@ def test_api_create_job_missing_topic(client):
     )
     assert resp.status_code == 400
     assert "topic" in resp.json["error"]
+
+
+def test_dashboard_get_routes_declare_http_methods():
+    """GET-only routes declare methods explicitly for static analysis."""
+    source = (PROJECT_ROOT / "clipper_agency/dashboard/app.py").read_text(encoding="utf-8")
+    assert '@app.route("/", methods=["GET"])' in source
+    assert '@app.route("/jobs", methods=["GET"])' in source
+    assert '@app.route("/api/jobs", methods=["GET"])' in source
+    assert '@app.route("/api/jobs/<int:job_id>", methods=["GET"])' in source
+
+
+def test_dashboard_index_uses_async_await():
+    """Index template uses async/await instead of promise chaining."""
+    source = (
+        PROJECT_ROOT / "clipper_agency/dashboard/templates/index.html"
+    ).read_text(encoding="utf-8")
+    assert ".then(" not in source
+    assert "await fetch" in source

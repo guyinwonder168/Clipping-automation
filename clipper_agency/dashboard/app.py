@@ -17,14 +17,14 @@ def _get_db():
     return conn
 
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 @requires_auth
 def index():
     """Dashboard home page."""
     return render_template("index.html")
 
 
-@app.route("/jobs")
+@app.route("/jobs", methods=["GET"])
 @requires_auth
 def jobs_page():
     """Jobs listing page."""
@@ -33,7 +33,7 @@ def jobs_page():
     return render_template("jobs.html", jobs=jobs)
 
 
-@app.route("/api/jobs")
+@app.route("/api/jobs", methods=["GET"])
 @requires_auth
 def api_jobs():
     """JSON API: list recent jobs."""
@@ -41,7 +41,7 @@ def api_jobs():
     return jsonify(list_jobs(conn, limit=50))
 
 
-@app.route("/api/jobs/<int:job_id>")
+@app.route("/api/jobs/<int:job_id>", methods=["GET"])
 @requires_auth
 def api_job_detail(job_id: int):
     """JSON API: get a specific job."""
