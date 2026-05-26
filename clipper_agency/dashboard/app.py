@@ -1,6 +1,9 @@
 """Flask dashboard app with basic auth and job listing."""
 
-from flask import Flask, jsonify, render_template, request
+import os
+
+from flask import Flask, abort, jsonify, render_template, request
+from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from clipper_agency.dashboard.auth import requires_auth
 from clipper_agency.db.connection import get_connection
@@ -8,6 +11,25 @@ from clipper_agency.db.queries import get_job, list_jobs
 from clipper_agency.db.schema import initialize_schema
 
 app = Flask(__name__, template_folder="templates")
+app.config["SECRET_KEY"] = os.getenv("DASHBOARD_SECRET_KEY")
+
+
+@app.before_request
+def require_csrf_secret():
+    """Fail closed for state-changing requests when CSRF config is missing."""
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not app.config.get(
+        "SECRET_KEY"
+    ):
+        abort(403)
+
+
+CSRFProtect(app)
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(error: CSRFError):
+    """Return JSON for CSRF validation failures."""
+    return jsonify({"error": error.description}), 400
 
 
 def _get_db():

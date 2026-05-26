@@ -1,6 +1,7 @@
 # Core
 click>=8.1
 flask>=3.0
+flask-wtf>=1.2
 httpx>=0.27
 pydantic>=2.5
 pydantic-settings>=2.1

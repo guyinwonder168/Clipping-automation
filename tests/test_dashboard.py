@@ -2,6 +2,7 @@
 
 import base64
 import os
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -98,7 +99,14 @@ def test_requires_auth_decorator_allows_auth():
 @pytest.fixture(autouse=True)
 def _set_auth_env():
     """Set auth env vars for all dashboard route tests."""
-    with patch.dict(os.environ, {"DASHBOARD_USERNAME": TEST_USER, "DASHBOARD_PASSWORD": TEST_PASS}):
+    with patch.dict(
+        os.environ,
+        {
+            "DASHBOARD_USERNAME": TEST_USER,
+            "DASHBOARD_PASSWORD": TEST_PASS,
+            "DASHBOARD_SECRET_KEY": "test-secret",
+        },
+    ):
         yield
 
 
@@ -106,7 +114,22 @@ def _set_auth_env():
 def client():
     """Flask test client."""
     dash_app.testing = True
+    dash_app.config.update(SECRET_KEY="test-secret", WTF_CSRF_ENABLED=True)
     return dash_app.test_client()
+
+
+def _auth_header():
+    credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
+    return {"Authorization": f"Basic {credentials}"}
+
+
+def _csrf_header(client):
+    response = client.get("/", headers=_auth_header())
+    token_match = re.search(
+        r'<meta name="csrf-token" content="([^"]+)">', response.text
+    )
+    assert token_match is not None
+    return {"X-CSRFToken": token_match.group(1)}
 
 
 def test_index_requires_auth(client):
@@ -160,14 +183,35 @@ def test_api_job_detail_not_found(client):
 
 def test_api_create_job_missing_topic(client):
     """API create job returns 400 when topic is missing."""
-    credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
+    headers = _auth_header() | _csrf_header(client)
     resp = client.post(
         "/api/jobs",
         json={},
-        headers={"Authorization": f"Basic {credentials}"},
+        headers=headers,
     )
     assert resp.status_code == 400
     assert "topic" in resp.json["error"]
+
+
+def test_api_create_job_requires_csrf_token(client):
+    """State-changing API requests require a CSRF token."""
+    resp = client.post(
+        "/api/jobs",
+        json={"topic": "news"},
+        headers=_auth_header(),
+    )
+    assert resp.status_code == 400
+
+
+def test_api_create_job_fails_when_csrf_secret_missing(client):
+    """State-changing API requests fail closed when CSRF config is missing."""
+    dash_app.config["SECRET_KEY"] = None
+    resp = client.post(
+        "/api/jobs",
+        json={"topic": "news"},
+        headers=_auth_header() | {"X-CSRFToken": "token"},
+    )
+    assert resp.status_code == 403
 
 
 def test_dashboard_get_routes_declare_http_methods():
