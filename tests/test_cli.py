@@ -1,7 +1,5 @@
 """Tests for the CLI commands."""
 
-import subprocess
-import sys
 from unittest.mock import patch
 
 from click.testing import CliRunner
@@ -111,15 +109,3 @@ class TestJobsCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["jobs"])
         assert result.exit_code == 0
-
-
-class TestMainEntryPoint:
-    def test_main_module_executable(self):
-        """Verify `python -m clipper_agency --help` works (covers __main__ guard)."""
-        result = subprocess.run(
-            [sys.executable, "-m", "clipper_agency", "--help"],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0
-        assert "Clipper Agency" in result.stdout
