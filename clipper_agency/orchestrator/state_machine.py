@@ -2,8 +2,8 @@
 
 The pipeline progresses through 20 defined states. Transitions are
 governed by VALID_TRANSITIONS; illegal transitions raise ValueError.
-Terminal states (COMPLETED, FAILED) accept no further transitions.
-PAUSED allows resuming to any state.
+COMPLETED is terminal; FAILED allows manual retry to CREATED.
+PAUSED resumes to any active state (NOT COMPLETED).
 """
 
 JOB_STATES = [
@@ -34,8 +34,8 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     "VIDEO_VALIDATED":    ["REVIEWING", "FAILED", "PAUSED"],
     "REVIEWING":          ["COMPLETED", "FAILED", "PAUSED"],
     "COMPLETED":          [],
-    "FAILED":             [],
-    "PAUSED":             JOB_STATES,  # Can resume to any state
+    "FAILED":             ["CREATED"],  # Manual retry from scratch
+    "PAUSED":             [s for s in JOB_STATES if s not in ("COMPLETED", "PAUSED")],
 }
 
 

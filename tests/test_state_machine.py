@@ -54,13 +54,31 @@ def test_failure_state():
     assert sm.is_terminal()
 
 
+def test_failed_retry():
+    """FAILED jobs can be manually restarted from CREATED."""
+    sm = JobStateMachine()
+    sm.transition_to("PREFLIGHT")
+    sm.transition_to("FAILED")
+    sm.transition_to("CREATED")
+    assert sm.current_state == "CREATED"
+
+
 def test_paused_state_can_resume():
     sm = JobStateMachine()
     sm.transition_to("PREFLIGHT")
     sm.transition_to("PAUSED")
-    # From PAUSED we can go to any state — choose RESEARCHING
+    # From PAUSED we can resume to any active state
     sm.transition_to("RESEARCHING")
     assert sm.current_state == "RESEARCHING"
+
+
+def test_paused_cannot_complete():
+    """PAUSED must not bypass gates by jumping to COMPLETED."""
+    sm = JobStateMachine()
+    sm.transition_to("PREFLIGHT")
+    sm.transition_to("PAUSED")
+    with pytest.raises(ValueError, match="Cannot transition"):
+        sm.transition_to("COMPLETED")
 
 
 def test_invalid_initial_state():
