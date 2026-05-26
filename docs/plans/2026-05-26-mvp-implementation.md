@@ -1018,7 +1018,7 @@ git add -A && git commit -m "feat: add database queries (CRUD for jobs and agent
 
 ---
 
-## Phase 3: External Services
+## Phase 3: External Services ✅ COMPLETED
 
 ### Task 9: OpenRouter LLM Client
 
@@ -1551,7 +1551,7 @@ Commit: `git add -A && git commit -m "feat: add ScrapeCreators TikTok data servi
 
 ---
 
-## Phase 4: Agent Framework
+## Phase 4: Agent Framework ✅ COMPLETED
 
 **Branch:** `phase/4-agent-framework` — merged to `master` via PR #6.
 
@@ -1992,7 +1992,7 @@ git add -A && git commit -m "feat: add job state machine with transition validat
 
 ---
 
-## Phase 5: Individual Agents
+## Phase 5: Individual Agents ✅ COMPLETED
 
 ### Task 18: Safety Agent (A1)
 
