@@ -11,15 +11,13 @@ from clipper_agency.db.queries import get_job, list_jobs
 from clipper_agency.db.schema import initialize_schema
 
 app = Flask(__name__, template_folder="templates")
-app.config["SECRET_KEY"] = os.getenv("DASHBOARD_SECRET_KEY")
+app.secret_key = os.getenv("DASHBOARD_SECRET_KEY")
 
 
 @app.before_request
 def require_csrf_secret():
     """Fail closed for state-changing requests when CSRF config is missing."""
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not app.config.get(
-        "SECRET_KEY"
-    ):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not app.secret_key:
         abort(403)
 
 

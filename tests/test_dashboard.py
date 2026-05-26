@@ -114,7 +114,8 @@ def _set_auth_env():
 def client():
     """Flask test client."""
     dash_app.testing = True
-    dash_app.config.update(SECRET_KEY="test-secret", WTF_CSRF_ENABLED=True)
+    dash_app.secret_key = "test-secret"
+    dash_app.config.update(WTF_CSRF_ENABLED=True)
     return dash_app.test_client()
 
 
@@ -205,7 +206,7 @@ def test_api_create_job_requires_csrf_token(client):
 
 def test_api_create_job_fails_when_csrf_secret_missing(client):
     """State-changing API requests fail closed when CSRF config is missing."""
-    dash_app.config["SECRET_KEY"] = None
+    dash_app.secret_key = None
     resp = client.post(
         "/api/jobs",
         json={"topic": "news"},
