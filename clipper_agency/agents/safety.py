@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
+from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
 from clipper_agency.llm.client import OpenRouterClient
 
 SAFETY_PROMPT = """You are a content safety checker. Analyze the following topic and return a JSON verdict:
@@ -36,10 +37,11 @@ class SafetyAgent(BaseAgent):
     ) -> dict[str, Any]:
         rules = safety_rules or []
         llm = OpenRouterClient()
+        prompt = load_prompt("safety", SAFETY_PROMPT, PROMPTS_DIR)
         response = llm.chat(
             model="glm-4-9b",
             messages=[
-                {"role": "system", "content": SAFETY_PROMPT},
+                {"role": "system", "content": prompt},
                 {
                     "role": "user",
                     "content": f"Topic: {topic}\nRules: {rules}",

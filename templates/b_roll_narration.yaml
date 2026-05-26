@@ -1,0 +1,10 @@
+name: b_roll_narration
+style: voiceover_clips_captions
+description: "Voiceover + clips + dynamic captions. Best for context-rich stories."
+layout:
+  resolution: 1080x1920
+  clip_duration: 3-5s
+  caption_style: dynamic
+  transitions:
+    type: crossfade
+    duration: 0.3s

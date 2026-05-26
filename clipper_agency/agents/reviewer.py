@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
+from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
 from clipper_agency.llm.client import OpenRouterClient
 
 REVIEWER_PROMPT = """You are a content quality reviewer for a TikTok creator channel.
@@ -52,12 +53,13 @@ class ReviewerAgent(BaseAgent):
         )
 
         llm = OpenRouterClient()
+        prompt = load_prompt("reviewer", REVIEWER_PROMPT, PROMPTS_DIR)
         response = llm.chat(
             model="glm-4-9b",
             messages=[
                 {
                     "role": "system",
-                    "content": REVIEWER_PROMPT.format(
+                    "content": prompt.format(
                         safety_rules_text=safety_rules_text,
                     ),
                 },

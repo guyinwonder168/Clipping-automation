@@ -158,3 +158,20 @@ class TestSafetyExecute:
         agent = SafetyAgent()
         agent.execute(job_id=1, topic="Test")
         assert mock_chat.call_args.kwargs["model"] == "glm-4-9b"
+
+    def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "safety.txt").write_text("File safety prompt", encoding="utf-8")
+        mock_chat = mocker.patch(
+            "clipper_agency.llm.client.OpenRouterClient.chat",
+            return_value=self._mock_chat(
+                '{"verdict": "pass", "reason": "OK"}'
+            ),
+        )
+        mocker.patch("clipper_agency.agents.safety.PROMPTS_DIR", prompts_dir)
+
+        SafetyAgent().execute(job_id=1, topic="Test")
+
+        system_content = mock_chat.call_args.kwargs["messages"][0]["content"]
+        assert system_content == "File safety prompt"

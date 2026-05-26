@@ -144,3 +144,26 @@ class TestReviewerExecute:
         )
         assert mock_chat.call_args.kwargs["model"] == "glm-4-9b"
         assert mock_chat.call_args.kwargs["temperature"] == 0.2
+
+    def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "reviewer.txt").write_text(
+            "File reviewer prompt: {safety_rules_text}", encoding="utf-8"
+        )
+        mock_chat = mocker.patch(
+            "clipper_agency.llm.client.OpenRouterClient.chat",
+            return_value=self._mock_chat(MOCK_REVIEW_PASS),
+        )
+        mocker.patch("clipper_agency.agents.reviewer.PROMPTS_DIR", prompts_dir)
+
+        ReviewerAgent().execute(
+            job_id=6,
+            topic="Topic",
+            script=[{"scene": 1, "text": "Test", "duration": 3}],
+            caption="Caption",
+            safety_rules=["no_defamation"],
+        )
+
+        system_content = mock_chat.call_args.kwargs["messages"][0]["content"]
+        assert system_content == "File reviewer prompt: - no_defamation"
