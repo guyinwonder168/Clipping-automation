@@ -13,7 +13,7 @@ def create_job(conn: sqlite3.Connection, topic: str, niche: str,
         """INSERT INTO jobs (topic, niche, account_id, template, config_snapshot)
            VALUES (?, ?, ?, ?, ?)""",
         (topic, niche, account_id, template,
-         json.dumps(config_snapshot) if config_snapshot else None),
+         json.dumps(config_snapshot) if config_snapshot is not None else None),
     )
     conn.commit()
     return cursor.lastrowid
@@ -82,7 +82,7 @@ def update_agent_state(conn: sqlite3.Connection, job_id: int,
         f"""UPDATE agent_states
             SET state = ?, output_data = COALESCE(?, output_data),
                 error_message = COALESCE(?, error_message),
-                completed_at = COALESCE({completed_sql}, completed_at)
+                completed_at = {completed_sql}
             WHERE job_id = ? AND agent_name = ?""",
         (state, output_data, error_message, job_id, agent_name),
     )

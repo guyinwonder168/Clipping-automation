@@ -57,6 +57,33 @@ def test_update_agent_state(temp_db_path):
     close_connection()
 
 
+def test_create_job_with_empty_config_snapshot(temp_db_path):
+    """Empty dict config_snapshot is stored as '{}', not NULL."""
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test", config_snapshot={})
+    job = get_job(conn, job_id)
+    assert job["config_snapshot"] == "{}"
+    close_connection()
+
+
+def test_update_agent_state_clears_completed_at_on_retry(temp_db_path):
+    """Transition from terminal to non-terminal clears completed_at."""
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+    create_agent_state(conn, job_id, "safety")
+    update_agent_state(conn, job_id, "safety", "completed")
+    state = get_agent_state(conn, job_id, "safety")
+    assert state["completed_at"] is not None
+
+    update_agent_state(conn, job_id, "safety", "running")
+    state = get_agent_state(conn, job_id, "safety")
+    assert state["state"] == "running"
+    assert state["completed_at"] is None
+    close_connection()
+
+
 def test_list_jobs_returns_ordered(temp_db_path):
     """list_jobs returns jobs ordered by created_at DESC."""
     conn = get_connection(temp_db_path)
