@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  clipper:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./assets:/app/assets
+      - ./niches:/app/niches
+      - ./templates:/app/templates
+    env_file:
+      - .env
+    command: python3 -c "from clipper_agency.dashboard.app import run_dashboard; run_dashboard()"
