@@ -1547,6 +1547,8 @@ Test with mocks.
 
 Commit: `git add -A && git commit -m "feat: add ScrapeCreators TikTok data service"`
 
+**Branch:** `phase/3-services` — merged to `master` via PR #5.
+
 ---
 
 ## Phase 4: Agent Framework

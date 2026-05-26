@@ -4,7 +4,7 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phase 0-2 complete).
+- **Greenfield project** — early implementation phase (Phase 0-3 complete).
 - All implementation is ahead of us.
 
 ## Python Commands
