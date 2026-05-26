@@ -2,29 +2,54 @@
 
 import click
 
-from clipper_agency.config.loader import load_config
+from clipper_agency.orchestrator.engine import Orchestrator
 
 
 @click.group()
-@click.option("--config", "-c", default=None, help="Path to config file")
-@click.pass_context
-def cli(ctx: click.Context, config: str | None) -> None:
+def cli() -> None:
     """Clipper Agency — automated video content production."""
-    ctx.ensure_object(dict)
-    ctx.obj["config"] = load_config(config) if config else {}
 
 
 @cli.command()
 @click.option("--topic", "-t", required=True, help="Topic for video generation")
-@click.option("--niche", "-n", default="indonesian_artists", help="Niche profile to use")
-@click.option("--template", "-m", default=None, help="Video template to use")
-@click.pass_context
-def run(ctx: click.Context, topic: str, niche: str, template: str | None) -> None:
+@click.option("--niche", "-n", default="indonesian_artists", help="Niche profile")
+@click.option("--db", default="data/clipper.db", help="Database path")
+@click.option("--output-dir", "-o", default="outputs", help="Output directory")
+@click.option("--dry-run", is_flag=True, help="Validate input without running pipeline")
+def run(topic: str, niche: str, db: str, output_dir: str, dry_run: bool) -> None:
     """Run the full pipeline for a topic."""
-    click.echo(f"Topic: {topic}")
+    click.echo(f"Clipper Agency — Topic: {topic}")
     click.echo(f"Niche: {niche}")
-    click.echo("Pipeline execution coming soon...")
+
+    if dry_run:
+        click.echo("Dry run: input valid. Pipeline execution coming soon...")
+        return
+
+    click.echo("Starting pipeline...")
+    orch = Orchestrator(db_path=db)
+    result = orch.run_pipeline(topic=topic, niche=niche, output_dir=output_dir)
+
+    if result["status"] == "completed":
+        click.echo(f"\N{check mark} Pipeline completed! Job ID: {result['job_id']}")
+        out = result.get("output", {})
+        if out.get("video_path"):
+            click.echo(f"  Video: {out['video_path']}")
+    else:
+        reason = result.get("reason") or result.get("error") or "Unknown error"
+        failed_at = result.get("failed_at", "")
+        loc = f" at {failed_at}" if failed_at else ""
+        click.echo(f"\N{cross mark} Pipeline failed{loc}: {reason}")
 
 
-if __name__ == "__main__":
-    cli()
+@cli.command()
+def jobs() -> None:
+    """List recent jobs."""
+    from clipper_agency.db.connection import get_connection
+    from clipper_agency.db.queries import list_jobs
+
+    conn = get_connection("data/clipper.db")
+    for job in list_jobs(conn, limit=10):
+        status_icon = "\N{check mark}" if job["status"] == "COMPLETED" else (
+            "\N{cross mark}" if job["status"] == "FAILED" else "\N{hourglass}"
+        )
+        click.echo(f"{status_icon} #{job['id']}: {job['topic']} — {job['status']} ({job['created_at']})")

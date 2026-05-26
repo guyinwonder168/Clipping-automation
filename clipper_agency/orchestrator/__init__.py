@@ -1,16 +1,17 @@
-"""Orchestrator — pipeline coordination, gates, and state machine."""
+"""Orchestrator — pipeline coordination, gates, state machine, and engine."""
 
+from clipper_agency.orchestrator.engine import Orchestrator
 from clipper_agency.orchestrator.gates import (
-    GateResult,
-    GateInputPreflight,
-    GateCostEstimate,
-    GateResearchCache,
-    GatePostResearchRisk,
-    GateSourceQuality,
-    GateCreativeMemory,
-    GateScriptValidation,
-    GateAudioValidation,
     GateAssetValidation,
+    GateAudioValidation,
+    GateCostEstimate,
+    GateCreativeMemory,
+    GateInputPreflight,
+    GatePostResearchRisk,
+    GateResearchCache,
+    GateResult,
+    GateScriptValidation,
+    GateSourceQuality,
     GateVideoValidation,
 )
 from clipper_agency.orchestrator.state_machine import (
@@ -20,6 +21,7 @@ from clipper_agency.orchestrator.state_machine import (
 )
 
 __all__ = [
+    "Orchestrator",
     "GateResult",
     "GateInputPreflight",
     "GateCostEstimate",
