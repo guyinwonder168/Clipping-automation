@@ -1014,7 +1014,7 @@ git add -A && git commit -m "feat: add database queries (CRUD for jobs and agent
 
 > **Implementation note:** `list_jobs` uses `ORDER BY id DESC` instead of `ORDER BY created_at DESC`. SQLite's `datetime('now')` has second granularity, causing identical timestamps for rapid sequential inserts. Auto-incrementing `id` is always unique and correctly ordered.
 
-**Branch:** `phase/2-database-layer` — pushed, PR #4 open, awaiting SonarCloud gate.
+**Branch:** `phase/2-database-layer` — merged to `master` via PR #4.
 
 ---
 

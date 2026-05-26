@@ -4,7 +4,7 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phase 0-1 complete).
+- **Greenfield project** — early implementation phase (Phase 0-2 complete).
 - All implementation is ahead of us.
 
 ## Python Commands
@@ -43,28 +43,30 @@ python3 -m clipper_agency  # run the app (once implemented)
 
 1. **Create feature branch** — `phase/N-short-description`
    ```bash
-   git checkout -b phase/2-database-layer
+   git checkout -b phase/N-short-description
    ```
 2. **Implement** — TDD: tests first, code, commit incrementally. Multiple commits per phase are fine.
-3. **Push branch** — `git push -u origin phase/2-database-layer`
+3. **Push branch** — `git push -u origin phase/N-short-description`
 4. **Create PR** — via `gh pr create`:
    ```bash
-   gh pr create --base master --title "Phase 2: Database Layer" --body "Implements database connection, schema, and queries per the implementation plan."
+   gh pr create --base master --title "Phase N: Feature Title" --body "Implements feature per the implementation plan."
    ```
 5. **Wait for SonarCloud** — PR must show ✅ green from SonarCloud Quality Gate.
    - If SonarCloud fails (bugs, vulnerabilities, code smells), fix issues on the branch, push again, and wait for re-check.
    - **Do NOT merge until SonarCloud passes.**
 6. **Merge** — **without squashing** (retain commit history):
    ```bash
-   gh pr merge phase/2-database-layer --merge
+   gh pr merge phase/N-short-description --merge
    ```
    - Never squash or rebase-merge. Use `--merge` (true merge commit).
 7. **Delete branch** — after merge succeeds:
    ```bash
-   git branch -d phase/2-database-layer           # local
-   git push origin --delete phase/2-database-layer  # remote
+   git branch -d phase/N-short-description           # local
+   git push origin --delete phase/N-short-description  # remote
    git checkout master && git pull origin master
    ```
+8. **Update docs** — update `AGENTS.md` (Repository State) and the plan document to reflect the completed phase.
+9. **Start next phase** — create new branch from updated master.
 
 ### Commit Message Convention
 
