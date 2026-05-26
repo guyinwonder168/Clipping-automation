@@ -5,6 +5,7 @@ import os
 from flask import Flask, abort, jsonify, render_template, request
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
+from clipper_agency import __version__
 from clipper_agency.dashboard.auth import requires_auth
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import get_job, list_jobs
@@ -41,7 +42,7 @@ def _get_db():
 @requires_auth
 def index():
     """Dashboard home page."""
-    return render_template("index.html")
+    return render_template("index.html", version=__version__)
 
 
 @app.route("/jobs", methods=["GET"])
@@ -50,7 +51,7 @@ def jobs_page():
     """Jobs listing page."""
     conn = _get_db()
     jobs = list_jobs(conn, limit=50)
-    return render_template("jobs.html", jobs=jobs)
+    return render_template("jobs.html", jobs=jobs, version=__version__)
 
 
 @app.route("/api/jobs", methods=["GET"])

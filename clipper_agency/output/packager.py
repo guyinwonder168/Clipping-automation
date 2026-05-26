@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from clipper_agency import __version__
+
 
 class OutputPackager:
     """Packages final video, caption, thumbnail, and metadata into output directory."""
@@ -49,6 +51,7 @@ class OutputPackager:
             # Write metadata
             full_metadata = {
                 "job_id": job_id,
+                "clipper_agency_version": __version__,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 **metadata,
             }
