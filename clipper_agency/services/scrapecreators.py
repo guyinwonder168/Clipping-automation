@@ -27,10 +27,10 @@ class ScrapeCreatorsService:
 
         with httpx.Client(base_url=self.BASE_URL, timeout=30) as client:
             resp = client.get(
-                "/tiktok/search",
+                "/tiktok/search/keyword",
                 headers={"x-api-key": self.api_key},
-                params={"keyword": query, "count": max_results},
+                params={"query": query},
             )
             resp.raise_for_status()
             data = resp.json()
-            return data.get("data", [])
+            return data.get("search_item_list", [])

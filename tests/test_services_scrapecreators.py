@@ -23,12 +23,14 @@ def test_search_tiktok_videos(mock_httpx):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "data": [
+        "search_item_list": [
             {
-                "id": "video123",
-                "title": "Artist Profile",
-                "author": "user1",
-                "play_count": 10000,
+                "aweme_id": "video123",
+                "desc": "Artist Profile",
+                "statistics": {
+                    "digg_count": 10000,
+                    "play_count": 50000,
+                },
             }
         ]
     }
@@ -39,4 +41,4 @@ def test_search_tiktok_videos(mock_httpx):
         results = svc.search_tiktok_videos("artist news")
 
     assert len(results) == 1
-    assert results[0]["id"] == "video123"
+    assert results[0]["aweme_id"] == "video123"

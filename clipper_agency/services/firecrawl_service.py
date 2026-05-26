@@ -32,7 +32,7 @@ class FirecrawlService:
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={"query": query, "maxResults": max_results},
+                json={"query": query, "limit": max_results},
             )
             resp.raise_for_status()
             data = resp.json()
