@@ -6,7 +6,7 @@ on:
       - master
 jobs:
   sonarqube:
-    name: SonarQube
+    name: SonarCloud
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -24,8 +24,8 @@ jobs:
       - name: Run tests with coverage
         run: python3 -m pytest --cov=clipper_agency --cov-report=xml --cov-report=term
 
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@9c04cf17c9cc77780bde580c0aaa3d649a5303a6 # v4.2.0
         with:
           args: >
             -Dsonar.python.version=3.11
