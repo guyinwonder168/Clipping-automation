@@ -27,10 +27,9 @@ def test_full_pipeline_smoke(temp_db_path):
         topic="Ariana Grande konser Jakarta viral",
         niche="indonesian_artists",
     )
-    assert result["status"] in ("completed", "failed")
-    if result["status"] == "completed":
-        assert "job_id" in result
-        assert "output" in result
+    assert result["status"] == "completed", f"Pipeline failed: {result.get('reason', result.get('error', 'unknown'))}"
+    assert "job_id" in result
+    assert "output" in result
 
 
 @pytest.mark.integration
@@ -42,4 +41,4 @@ def test_short_topic_does_not_crash(temp_db_path):
 
     orch = Orchestrator(db_path=temp_db_path)
     result = orch.run_pipeline(topic="Test", niche="indonesian_artists")
-    assert "status" in result
+    assert result["status"] in ("completed", "failed"), f"Unexpected status: {result.get('status')}"

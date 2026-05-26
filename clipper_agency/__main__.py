@@ -67,3 +67,7 @@ def jobs() -> None:
         else:
             status_icon = "\N{hourglass}"
         click.echo(f"{status_icon} #{job['id']}: {job['topic']} — {job['status']} ({job['created_at']})")
+
+
+if __name__ == "__main__":
+    cli()

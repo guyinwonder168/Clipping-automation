@@ -12,4 +12,4 @@ COPY . .
 RUN mkdir -p data outputs assets/cache assets/voiceovers
 
 EXPOSE 5000
-CMD ["python3", "-m", "clipper_agency"]
+CMD ["python3", "-m", "clipper_agency", "dashboard"]
