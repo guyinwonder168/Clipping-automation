@@ -1,5 +1,6 @@
 """Tests for the web dashboard with basic auth and job listing."""
 
+import base64
 import os
 from unittest.mock import patch
 
@@ -8,23 +9,43 @@ import pytest
 from clipper_agency.dashboard.auth import authenticate, check_auth, requires_auth
 from clipper_agency.dashboard.app import app as dash_app
 
+# Test credentials
+TEST_USER = "admin"
+TEST_PASS = "changeme"
 
-# ── Auth Tests ──
+
+class TestAuthFailsClosed:
+    """auth fails closed when DASHBOARD_USERNAME or DASHBOARD_PASSWORD is unset."""
+
+    def test_fails_when_username_unset(self):
+        with patch.dict(os.environ, {}, clear=True):
+            assert check_auth("admin", "changeme") is False
+
+    def test_fails_when_password_unset(self):
+        with patch.dict(os.environ, {"DASHBOARD_USERNAME": "admin"}, clear=True):
+            assert check_auth("admin", "any") is False
+
+    def test_fails_when_both_unset(self):
+        with patch.dict(os.environ, {}, clear=True):
+            assert check_auth("any", "any") is False
 
 
 def test_check_auth_valid():
     """check_auth returns True when credentials match env vars."""
-    assert check_auth("admin", "changeme") is True
+    with patch.dict(os.environ, {"DASHBOARD_USERNAME": TEST_USER, "DASHBOARD_PASSWORD": TEST_PASS}):
+        assert check_auth(TEST_USER, TEST_PASS) is True
 
 
 def test_check_auth_invalid_username():
     """check_auth returns False for wrong username."""
-    assert check_auth("hacker", "changeme") is False
+    with patch.dict(os.environ, {"DASHBOARD_USERNAME": TEST_USER, "DASHBOARD_PASSWORD": TEST_PASS}):
+        assert check_auth("hacker", TEST_PASS) is False
 
 
 def test_check_auth_invalid_password():
     """check_auth returns False for wrong password."""
-    assert check_auth("admin", "wrongpass") is False
+    with patch.dict(os.environ, {"DASHBOARD_USERNAME": TEST_USER, "DASHBOARD_PASSWORD": TEST_PASS}):
+        assert check_auth(TEST_USER, "wrongpass") is False
 
 
 def test_check_auth_custom_env():
@@ -55,20 +76,27 @@ def test_requires_auth_decorator_blocks_unauth():
 
 def test_requires_auth_decorator_allows_auth():
     """requires_auth passes through when correct auth provided."""
-    import base64
+    with patch.dict(os.environ, {"DASHBOARD_USERNAME": TEST_USER, "DASHBOARD_PASSWORD": TEST_PASS}):
 
-    @requires_auth
-    def protected():
-        return "secret"
+        @requires_auth
+        def protected():
+            return "secret"
 
-    credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
-    with dash_app.test_request_context(
-        "/", headers={"Authorization": f"Basic {credentials}"}
-    ):
-        assert protected() == "secret"
+        credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
+        with dash_app.test_request_context(
+            "/", headers={"Authorization": f"Basic {credentials}"}
+        ):
+            assert protected() == "secret"
 
 
 # ── App Route Tests ──
+
+
+@pytest.fixture(autouse=True)
+def _set_auth_env():
+    """Set auth env vars for all dashboard route tests."""
+    with patch.dict(os.environ, {"DASHBOARD_USERNAME": TEST_USER, "DASHBOARD_PASSWORD": TEST_PASS}):
+        yield
 
 
 @pytest.fixture
@@ -86,7 +114,6 @@ def test_index_requires_auth(client):
 
 def test_index_with_auth(client):
     """Index route returns 200 with valid auth."""
-    import base64
     credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
     resp = client.get("/", headers={"Authorization": f"Basic {credentials}"})
     assert resp.status_code == 200
@@ -100,7 +127,6 @@ def test_jobs_page_requires_auth(client):
 
 def test_jobs_page_with_auth(client):
     """Jobs page returns 200 with valid auth."""
-    import base64
     credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
     resp = client.get("/jobs", headers={"Authorization": f"Basic {credentials}"})
     assert resp.status_code == 200
@@ -114,7 +140,6 @@ def test_api_jobs_requires_auth(client):
 
 def test_api_jobs_with_auth_returns_json(client):
     """API jobs returns JSON list with valid auth."""
-    import base64
     credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
     resp = client.get("/api/jobs", headers={"Authorization": f"Basic {credentials}"})
     assert resp.status_code == 200
@@ -124,7 +149,6 @@ def test_api_jobs_with_auth_returns_json(client):
 
 def test_api_job_detail_not_found(client):
     """API job detail returns 404 for non-existent job."""
-    import base64
     credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
     resp = client.get("/api/jobs/99999", headers={"Authorization": f"Basic {credentials}"})
     assert resp.status_code == 404
@@ -133,7 +157,6 @@ def test_api_job_detail_not_found(client):
 
 def test_api_create_job_missing_topic(client):
     """API create job returns 400 when topic is missing."""
-    import base64
     credentials = base64.b64encode(b"admin:changeme").decode("utf-8")
     resp = client.post(
         "/api/jobs",

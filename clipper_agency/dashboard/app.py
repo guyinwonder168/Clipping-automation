@@ -5,8 +5,16 @@ from flask import Flask, jsonify, render_template, request
 from clipper_agency.dashboard.auth import requires_auth
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import get_job, list_jobs
+from clipper_agency.db.schema import initialize_schema
 
 app = Flask(__name__, template_folder="templates")
+
+
+def _get_db():
+    """Get a database connection with schema initialization."""
+    conn = get_connection("data/clipper.db")
+    initialize_schema(conn)
+    return conn
 
 
 @app.route("/")
@@ -20,7 +28,7 @@ def index():
 @requires_auth
 def jobs_page():
     """Jobs listing page."""
-    conn = get_connection("data/clipper.db")
+    conn = _get_db()
     jobs = list_jobs(conn, limit=50)
     return render_template("jobs.html", jobs=jobs)
 
@@ -29,7 +37,7 @@ def jobs_page():
 @requires_auth
 def api_jobs():
     """JSON API: list recent jobs."""
-    conn = get_connection("data/clipper.db")
+    conn = _get_db()
     return jsonify(list_jobs(conn, limit=50))
 
 
@@ -37,7 +45,7 @@ def api_jobs():
 @requires_auth
 def api_job_detail(job_id: int):
     """JSON API: get a specific job."""
-    conn = get_connection("data/clipper.db")
+    conn = _get_db()
     job = get_job(conn, job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404

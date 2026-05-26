@@ -8,9 +8,15 @@ from flask import Response, request
 
 
 def check_auth(username: str, password: str) -> bool:
-    """Check credentials against env vars."""
-    expected_user = os.getenv("DASHBOARD_USERNAME", "admin")
-    expected_pass = os.getenv("DASHBOARD_PASSWORD", "changeme")
+    """Check credentials against env vars.
+
+    Fails closed: if DASHBOARD_USERNAME or DASHBOARD_PASSWORD is not set,
+    all authentication attempts are rejected.
+    """
+    expected_user = os.getenv("DASHBOARD_USERNAME")
+    expected_pass = os.getenv("DASHBOARD_PASSWORD")
+    if not expected_user or not expected_pass:
+        return False
     return username == expected_user and password == expected_pass
 
 
