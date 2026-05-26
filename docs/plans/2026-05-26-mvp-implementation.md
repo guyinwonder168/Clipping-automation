@@ -2778,7 +2778,7 @@ git add -A && git commit -m "feat: add Output Packager (video + caption + thumbn
 
 ## Phase 6: Orchestrator ✅ COMPLETED
 
-**Branch:** `phase/6-orchestrator` — merged to `master` via PR #8.
+**Branch:** `phase/6-orchestrator` — merged to `master` via PR #8 (initial) and PR #9 (bug fixes + coverage).
 
 ### Task 26: Orchestrator Engine ✅
 
@@ -3091,6 +3091,29 @@ def jobs() -> None:
 ```bash
 git add -A && git commit -m "feat: add CLI interface with run and jobs commands"
 ```
+
+---
+
+### Post-Merge: Bug Fixes & Coverage (PR #9)
+
+**After Phase 6 merge**, 3 bugs and coverage gaps were discovered and fixed:
+
+**Bug Fixes:**
+- **SonarCloud `python:S3358`** — Nested ternary in `__main__.py` extracted into if/elif/else
+- **P0: Research sources unwrap** — Orchestrator now unwraps aggregate `{sources: [...]}` dict from ResearcherAgent
+- **P1: G4 gate unchecked** — Pipeline aborts on `hard_fail` from PostResearchRisk gate
+- **P1: Package failure unchecked** — Job marked `FAILED` when OutputPackager returns error
+
+**Coverage (26 tests):** 87% → 97% overall line coverage
+- `config/loader.py`: 19% → 100%
+- `llm/router.py`: 80% → 100%
+- `config/hierarchy.py`: 90% → 100%
+- `agents/composer.py`: 90% → 100%
+- `output/packager.py`: 94% → 100%
+- `services/pexels.py`: 93% → 100%
+- `services/ytdlp.py`: 85% → 100%
+
+**Test suite:** 190 → 216 tests (97% coverage)
 
 ---
 
