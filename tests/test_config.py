@@ -63,3 +63,22 @@ def test_agent_defaults_preset():
     ad = AgentDefaults()
     assert "researcher" in ad.agents
     assert ad.agents["researcher"]["model"] == "mimo-v2-flash"
+
+
+def test_config_hierarchy_account_override():
+    """Account override takes precedence over niche but loses to job."""
+    hierarchy = ConfigHierarchy()
+    hierarchy.set_niche_override("researcher", "model", "qwen3-32b")
+    hierarchy.set_account_override("researcher", "model", "gemini-2.5-flash")
+    # Account beats niche
+    assert hierarchy.get("researcher", "model") == "gemini-2.5-flash"
+    # Job still beats account
+    hierarchy.set_job_override("researcher", "model", "deepseek-v3.2")
+    assert hierarchy.get("researcher", "model") == "deepseek-v3.2"
+
+
+def test_config_hierarchy_account_override_for_unknown_agent():
+    """Account override for an agent not in defaults returns the override."""
+    hierarchy = ConfigHierarchy()
+    hierarchy.set_account_override("custom_agent", "timeout", 120)
+    assert hierarchy.get("custom_agent", "timeout") == 120

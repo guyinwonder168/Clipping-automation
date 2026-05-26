@@ -103,3 +103,24 @@ class TestComposerExecute:
         assert result["video_path"] in thumb_args
         assert "-frames:v" in thumb_args
         assert "1" in thumb_args
+
+    def test_build_filter_no_video_assets_returns_null(self):
+        """Line 60: empty assets list returns 'null' filter string."""
+        agent = ComposerAgent()
+        result = agent._build_filter([], [])
+        assert result == "null"
+
+    def test_build_filter_no_audio_uses_silent_source(self):
+        """Line 77: no audio files → uses anullsrc for silent audio."""
+        agent = ComposerAgent()
+        assets = [{"scene": 1, "path": "/tmp/scene_1.mp4"}]
+        result = agent._build_filter(assets, [])
+        assert "anullsrc[outa]" in result
+        assert "concat" in result
+
+    def test_assemble_video_empty_inputs_returns_early(self, mocker):
+        """Line 86: no video inputs → early return, no ffmpeg call."""
+        mock_run = mocker.patch("subprocess.run")
+        agent = ComposerAgent()
+        agent._assemble_video([], [], "/tmp/output.mp4")
+        mock_run.assert_not_called()

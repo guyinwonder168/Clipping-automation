@@ -1,0 +1,6 @@
+name: rapid_update
+type: rapid_update
+duration: 30
+assets_required:
+  - b_roll
+  - watermark

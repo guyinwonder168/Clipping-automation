@@ -1,0 +1,11 @@
+name: indonesian_artists
+language: "id"
+tone: casual_tiktok
+video_length:
+  target: 30
+  hard_limit: 60
+safety_rules:
+  - no_defamation
+  - no_sara
+  - mark_rumors_as_unconfirmed
+caption_style: short_with_hashtags
