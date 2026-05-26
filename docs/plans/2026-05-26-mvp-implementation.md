@@ -1553,7 +1553,7 @@ Commit: `git add -A && git commit -m "feat: add ScrapeCreators TikTok data servi
 
 ## Phase 4: Agent Framework
 
-**Branch:** `phase/4-agent-framework` — PR #6.
+**Branch:** `phase/4-agent-framework` — merged to `master` via PR #6.
 
 ### Task 15: Base Agent Class
 
