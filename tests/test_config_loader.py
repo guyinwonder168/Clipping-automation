@@ -32,6 +32,15 @@ class TestLoadNiche:
         with pytest.raises(FileNotFoundError, match="Niche not found"):
             load_niche("nonexistent_niche", niches_dir=fixtures_dir)
 
+    def test_load_default_indonesian_artists_niche(self):
+        niche = load_niche("indonesian_artists")
+
+        assert isinstance(niche, NicheConfig)
+        assert niche.name == "indonesian_artists"
+        assert niche.language == "id"
+        assert niche.video_length.target == 30
+        assert "no_defamation" in niche.safety_rules
+
 
 class TestLoadTemplate:
     """load_template() — reads template YAML into TemplateConfig."""
@@ -47,6 +56,14 @@ class TestLoadTemplate:
     def test_load_template_file_not_found(self, fixtures_dir):
         with pytest.raises(FileNotFoundError, match="Template not found"):
             load_template("nonexistent_template", templates_dir=fixtures_dir)
+
+    @pytest.mark.parametrize("template_name", ["news_card", "b_roll_narration", "rapid_update"])
+    def test_load_default_templates(self, template_name):
+        template = load_template(template_name)
+
+        assert isinstance(template, TemplateConfig)
+        assert template.name == template_name
+        assert template.type == template_name
 
 
 class TestLoadConfig:

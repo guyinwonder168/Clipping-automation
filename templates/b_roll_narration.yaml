@@ -1,4 +1,5 @@
 name: b_roll_narration
+type: b_roll_narration
 style: voiceover_clips_captions
 description: "Voiceover + clips + dynamic captions. Best for context-rich stories."
 layout:

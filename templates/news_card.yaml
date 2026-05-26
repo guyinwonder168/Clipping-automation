@@ -1,4 +1,5 @@
 name: news_card
+type: news_card
 style: headline_image_facts
 description: "Headline + image + facts + captions. Best for quick updates."
 layout:

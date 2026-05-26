@@ -1,26 +1,25 @@
-niche:
-  name: indonesian_artists
-  language: id
-  tone: casual_tiktok
-  video_length:
-    target: 30
-    hard_limit: 60
-  voice:
-    provider: elevenlabs
-    default_voice_id: ""  # Configure via env ELEVENLABS_VOICE_ID
-  thumbnail:
-    template: headline_frame
-    resolution: 1080x1920
-  content_angle: trending_artist_update
-  safety_rules:
-    - no_defamation
-    - mark_rumors_as_unconfirmed
-    - soft_wording_for_unverified
-  caption_style: short_with_hashtags
-  max_hashtags: 5
-  search_terms:
-    - viral
-    - ramai dibahas
-    - klarifikasi
-    - gosip
-    - trending
+name: indonesian_artists
+language: id
+tone: casual_tiktok
+video_length:
+  target: 30
+  hard_limit: 60
+voice:
+  provider: elevenlabs
+  default_voice_id: ""  # Configure via env ELEVENLABS_VOICE_ID
+thumbnail:
+  template: headline_frame
+  resolution: 1080x1920
+content_angle: trending_artist_update
+safety_rules:
+  - no_defamation
+  - mark_rumors_as_unconfirmed
+  - soft_wording_for_unverified
+caption_style: short_with_hashtags
+max_hashtags: 5
+search_terms:
+  - viral
+  - ramai dibahas
+  - klarifikasi
+  - gosip
+  - trending
