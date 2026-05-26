@@ -49,7 +49,10 @@ def jobs() -> None:
 
     conn = get_connection("data/clipper.db")
     for job in list_jobs(conn, limit=10):
-        status_icon = "\N{check mark}" if job["status"] == "COMPLETED" else (
-            "\N{cross mark}" if job["status"] == "FAILED" else "\N{hourglass}"
-        )
+        if job["status"] == "COMPLETED":
+            status_icon = "\N{check mark}"
+        elif job["status"] == "FAILED":
+            status_icon = "\N{cross mark}"
+        else:
+            status_icon = "\N{hourglass}"
         click.echo(f"{status_icon} #{job['id']}: {job['topic']} — {job['status']} ({job['created_at']})")

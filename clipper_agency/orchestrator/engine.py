@@ -103,9 +103,17 @@ class Orchestrator:
 
             # G4: Post-Research Risk
             g4 = GatePostResearchRisk()
-            g4.evaluate(
+            g4_result = g4.evaluate(
                 risk_flags=research_output.get("risk_flags", []),
             )
+            if not g4_result.passed and g4_result.severity == "hard_fail":
+                update_job_status(conn, job_id, "FAILED", g4_result.message)
+                return {
+                    "status": "failed",
+                    "failed_at": "post_research_risk",
+                    "reason": g4_result.message,
+                    "job_id": job_id,
+                }
 
             # G5: Source Quality
             g5 = GateSourceQuality()
@@ -150,8 +158,15 @@ class Orchestrator:
             g8.evaluate(audio_path=first_audio)
 
             # Visual Director Agent
-            research_sources = research_output.get("sources", [])
-            source_urls = [s["url"] for s in research_sources if s.get("url")]
+            sources_data = research_output.get("sources", {})
+            if isinstance(sources_data, dict):
+                research_sources = sources_data.get("sources", [])
+            elif isinstance(sources_data, list):
+                research_sources = sources_data
+            else:
+                research_sources = []
+            source_urls = [s["url"] for s in research_sources
+                           if isinstance(s, dict) and s.get("url")]
             visual_output = self._run_visual_director(
                 job_id=job_id,
                 script=script_output.get("script", []),
@@ -207,6 +222,16 @@ class Orchestrator:
                 niche=niche,
                 output_dir=output_dir,
             )
+
+            if pkg_output.get("status") == "failed":
+                update_job_status(conn, job_id, "FAILED",
+                                  pkg_output.get("error", "Packaging failed"))
+                return {
+                    "status": "failed",
+                    "failed_at": "packaging",
+                    "reason": pkg_output.get("error", "Packaging failed"),
+                    "job_id": job_id,
+                }
 
             update_job_status(conn, job_id, "COMPLETED")
             return {

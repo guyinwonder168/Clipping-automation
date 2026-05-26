@@ -89,3 +89,21 @@ class TestPackagerFileCopy:
         )
         assert result["status"] == "failed"
         assert "error" in result
+
+    def test_package_handles_unexpected_exception(self, tmp_path, mocker):
+        """Lines 65-66: unexpected exception during packaging returns failed."""
+        mocker.patch("shutil.copy2", side_effect=OSError("disk full"))
+        packager = OutputPackager()
+        video_path = str(tmp_path / "test.mp4")
+        Path(video_path).write_text("video")
+        output_dir = str(tmp_path / "output")
+        result = packager.package(
+            job_id=5,
+            video_path=video_path,
+            caption_path="",
+            thumbnail_path="",
+            metadata={},
+            output_dir=output_dir,
+        )
+        assert result["status"] == "failed"
+        assert "disk full" in result["error"]

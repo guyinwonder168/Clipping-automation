@@ -438,3 +438,105 @@ class TestOrchestratorRunPipeline:
 
         assert "cost_estimate" in result
         assert result["cost_estimate"]["estimate_cents"] > 0
+
+    # ── Bug-fix tests ──────────────────────────────────────────────
+
+    def test_unwraps_aggregate_research_sources(self, db_initialized):
+        """P0: Orchestrator must unwrap Researcher's aggregate sources dict
+        before extracting source URLs. The real ResearcherAgent.execute()
+        returns 'sources' as {firecrawl_count, scrapecreators_count,
+        total_sources, sources: [...]} — not a flat list."""
+        orch = Orchestrator(db_path=db_initialized)
+        # Simulate the real ResearcherAgent output format
+        aggregate_sources = {
+            "firecrawl_count": 2,
+            "scrapecreators_count": 1,
+            "total_sources": 3,
+            "sources": [
+                {"url": "https://a.com", "title": "A"},
+                {"url": "https://b.com", "title": "B"},
+                {"url": "https://c.com", "title": "C"},
+            ],
+        }
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {
+                "status": "completed",
+                "research_brief": "ok",
+                "sources": aggregate_sources,
+            }
+            mock_scriptwriter.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_voice.return_value = {"status": "completed", "audio_files": []}
+            mock_visual.return_value = {"status": "completed", "assets": []}
+            mock_composer.return_value = {"status": "completed", "video_path": "/tmp/final.mp4", "thumbnail_path": "/tmp/thumb.png"}
+            mock_reviewer.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            orch.run_pipeline(topic="Test", niche="test_niche")
+
+        # Visual director should receive only the inner sources list URLs
+        visual_call = mock_visual.call_args[1]
+        assert visual_call.get("source_urls") is not None
+        assert visual_call["source_urls"] == ["https://a.com", "https://b.com", "https://c.com"]
+
+    def test_g4_hard_fail_aborts_pipeline(self, db_initialized):
+        """P1: G4 (PostResearchRisk) returning hard_fail must abort the
+        pipeline — currently the result is computed but never checked."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            # Researcher returns a danger flag that triggers G4 hard_fail
+            mock_researcher.return_value = {
+                "status": "completed",
+                "research_brief": "ok",
+                "sources": [],
+                "risk_flags": ["defamation"],
+            }
+            mock_scriptwriter.return_value = {}
+
+            result = orch.run_pipeline(topic="Test", niche="test_niche")
+
+        assert result["status"] == "failed"
+        assert result.get("failed_at") in ("post_research_risk", "g4")
+        mock_scriptwriter.assert_not_called()
+
+    def test_package_failure_sets_job_failed(self, db_initialized):
+        """P1: When OutputPackager returns status='failed', the job must be
+        marked FAILED — currently COMPLETED is set unconditionally."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": []}
+            mock_scriptwriter.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_voice.return_value = {"status": "completed", "audio_files": []}
+            mock_visual.return_value = {"status": "completed", "assets": []}
+            mock_composer.return_value = {"status": "completed", "video_path": "/tmp/final.mp4", "thumbnail_path": "/tmp/thumb.png"}
+            mock_reviewer.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            # Package returns FAILED
+            mock_pkg.return_value = {"status": "failed", "error": "Disk full", "output_dir": "/tmp"}
+
+            result = orch.run_pipeline(topic="Test", niche="test_niche")
+
+        assert result["status"] == "failed"
+        assert result.get("failed_at") == "packaging"
+
+        conn = get_connection(db_initialized)
+        job = conn.execute("SELECT status FROM jobs WHERE id = ?", (result["job_id"],)).fetchone()
+        assert job["status"] == "FAILED"
