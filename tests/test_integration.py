@@ -5,6 +5,8 @@ These tests exercise the Orchestrator end-to-end. They are marked
 ``-m integration`` is passed.
 """
 
+import os
+
 import pytest
 
 from clipper_agency.db.connection import close_connection, get_connection
@@ -12,7 +14,14 @@ from clipper_agency.db.schema import initialize_schema
 from clipper_agency.orchestrator.engine import Orchestrator
 
 
+requires_openrouter = pytest.mark.skipif(
+    not os.environ.get("OPENROUTER_API_KEY"),
+    reason="OPENROUTER_API_KEY not set",
+)
+
+
 @pytest.mark.integration
+@requires_openrouter
 def test_full_pipeline_smoke(temp_db_path):
     """Smoke test: run full pipeline with a simple topic.
 
@@ -33,6 +42,7 @@ def test_full_pipeline_smoke(temp_db_path):
 
 
 @pytest.mark.integration
+@requires_openrouter
 def test_short_topic_does_not_crash(temp_db_path):
     """Smoke test: a minimal topic should not crash the pipeline."""
     conn = get_connection(temp_db_path)
