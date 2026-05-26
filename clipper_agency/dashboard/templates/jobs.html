@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Jobs — Clipper Agency{% endblock %}
+{% block content %}
+<h1>Jobs</h1>
+<table>
+    <tr><th>ID</th><th>Topic</th><th>Niche</th><th>Status</th><th>Created</th></tr>
+    {% for job in jobs %}
+    <tr>
+        <td>{{ job.id }}</td>
+        <td>{{ job.topic }}</td>
+        <td>{{ job.niche }}</td>
+        <td class="status-{{ job.status.lower() }}">{{ job.status }}</td>
+        <td>{{ job.created_at }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

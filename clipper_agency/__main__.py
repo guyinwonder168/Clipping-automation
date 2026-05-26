@@ -42,6 +42,17 @@ def run(topic: str, niche: str, db: str, output_dir: str, dry_run: bool) -> None
 
 
 @cli.command()
+@click.option("--host", default="0.0.0.0", help="Host to bind")
+@click.option("--port", default=5000, help="Port to bind")
+def dashboard(host: str, port: int) -> None:
+    """Start the web dashboard."""
+    from clipper_agency.dashboard.app import run_dashboard
+
+    click.echo(f"Dashboard starting at http://{host}:{port}")
+    run_dashboard(host=host, port=port)
+
+
+@cli.command()
 def jobs() -> None:
     """List recent jobs."""
     from clipper_agency.db.connection import get_connection
