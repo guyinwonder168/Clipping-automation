@@ -10,6 +10,7 @@ from clipper_agency.agents.safety import SafetyAgent
 from clipper_agency.agents.scriptwriter import ScriptwriterAgent
 from clipper_agency.agents.visual_director import VisualDirectorAgent
 from clipper_agency.agents.voice_producer import VoiceProducerAgent
+from clipper_agency.config.loader import load_settings
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import (
     create_agent_state,
@@ -56,6 +57,8 @@ class Orchestrator:
                        Composer→G10→Reviewer→Package
         """
         conn = get_connection(self.db_path)
+        settings = load_settings()
+        assets_cache = str(kwargs.get("assets_cache") or settings.assets_cache)
         logger.info("Pipeline START: niche='%s'", niche)
 
         # G1: Input Preflight
@@ -84,7 +87,11 @@ class Orchestrator:
 
             # Safety Agent (via delegating method for testability)
             logger.info("G2: running Safety agent")
-            safety_result = self._run_safety(job_id=job_id, topic=topic)
+            safety_result = self._run_safety(
+                job_id=job_id,
+                topic=topic,
+                assets_cache=assets_cache,
+            )
             if safety_result.get("status") == "hard_fail":
                 logger.error("Safety FAILED: %s", safety_result.get("reason"))
                 update_job_status(conn, job_id, "FAILED", safety_result["reason"])

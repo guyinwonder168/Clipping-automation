@@ -7,6 +7,8 @@ from typing import Any
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
 from clipper_agency.config.loader import load_settings
+from clipper_agency.core.artifacts import write_json, write_text
+from clipper_agency.core.paths import agent_input_file, agent_output_file, agent_dir
 from clipper_agency.llm.client import OpenRouterClient
 
 logger = logging.getLogger(__name__)
@@ -37,10 +39,15 @@ class SafetyAgent(BaseAgent):
         job_id: int,
         topic: str = "",
         safety_rules: list[str] | None = None,
+        assets_cache: str = "",
         **kwargs: Any,
     ) -> dict[str, Any]:
         rules = safety_rules or []
         logger.info("Safety: checking rules=%d", len(rules))
+
+        input_data = {"job_id": job_id, "topic": topic, "safety_rules": rules}
+        if assets_cache:
+            write_json(agent_input_file(assets_cache, job_id, self.agent_name), input_data)
 
         settings = load_settings()
         llm = OpenRouterClient()
@@ -58,6 +65,12 @@ class SafetyAgent(BaseAgent):
             max_tokens=256,
         )
         result = self._parse_response(response["content"])
+        if assets_cache:
+            write_json(agent_output_file(assets_cache, job_id, self.agent_name), result)
+            write_text(
+                f"{agent_dir(assets_cache, job_id, self.agent_name)}/summary.md",
+                f"# Safety Summary\n\nStatus: {result.get('status')}\n\nReason: {result.get('reason', '')}\n",
+            )
         logger.info("Safety: verdict=%s", result.get("status"))
         return result
 
