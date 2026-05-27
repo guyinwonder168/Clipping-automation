@@ -1,8 +1,8 @@
 # Clipper Agency — Product Requirements Document
 
-**Version:** 2.2
+**Version:** 2.3
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-10)
+**Status:** Final — MVP Implementation Complete (Phase 0-11)
 **Related:** `docs/SRS.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -95,6 +95,9 @@ Every successful job produces:
 | PR-19 | TikTok Direct Post API integration | P2 | Stage 3 |
 | PR-20 | Multi-platform publishing (Instagram Reels, YouTube Shorts) | P2 | Stage 3+ |
 | PR-21 | Post-publishing analytics (Stage 1.5 basic snapshots → Stage 2 expanded → Stage 3 learning loop) | P2 | Stage 1.5+ |
+| PR-22 | Per-agent model configuration via environment variables | P0 | MVP |
+| PR-23 | Structured logging for all external API calls, agent executions, and pipeline state transitions | P0 | MVP |
+| PR-24 | `test-agent` CLI subcommand for independent agent testing/debugging | P1 | MVP |
 
 ---
 

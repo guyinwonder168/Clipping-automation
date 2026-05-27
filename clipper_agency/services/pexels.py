@@ -1,10 +1,13 @@
 """Pexels stock media search and download service."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class PexelsService:
@@ -26,6 +29,7 @@ class PexelsService:
         if not self.api_key:
             raise ValueError("PEXELS_API_KEY not set")
 
+        logger.info("Pexels: searching videos (per_page=%d)", per_page)
         with httpx.Client(base_url=self.BASE_URL) as client:
             resp = client.get(
                 "/videos/search",
@@ -38,6 +42,8 @@ class PexelsService:
             )
             resp.raise_for_status()
             data = resp.json()
+            videos = data.get("videos", [])
+            logger.info("Pexels: found %d videos", len(videos))
             return [
                 {
                     "id": v["id"],
@@ -49,7 +55,7 @@ class PexelsService:
                         if f.get("quality") == "hd" or f.get("height", 0) <= 1080
                     ],
                 }
-                for v in data.get("videos", [])
+                for v in videos
             ]
 
     def download_video(self, video_url: str, output_path: str) -> str | None:

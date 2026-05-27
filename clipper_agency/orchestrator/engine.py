@@ -1,5 +1,6 @@
 """Orchestrator Engine — coordinates the full gated agent pipeline."""
 
+import logging
 from typing import Any
 
 from clipper_agency.agents.composer import ComposerAgent
@@ -30,6 +31,8 @@ from clipper_agency.orchestrator.gates import (
 )
 from clipper_agency.output.packager import OutputPackager
 
+logger = logging.getLogger(__name__)
+
 
 class Orchestrator:
     """Coordinates the full gated agent pipeline: Topic → Output Package."""
@@ -53,17 +56,20 @@ class Orchestrator:
                        Composer→G10→Reviewer→Package
         """
         conn = get_connection(self.db_path)
+        logger.info("Pipeline START: niche='%s'", niche)
 
         # G1: Input Preflight
         g1 = GateInputPreflight()
         g1_result = g1.evaluate(topic=topic, niche_config={"name": niche})
         if not g1_result.passed:
+            logger.error("G1 Preflight FAILED: %s", g1_result.message)
             update_job_status(conn, 0, "FAILED", g1_result.message)
             return {"status": "failed", "failed_at": "preflight",
                     "reason": g1_result.message, "job_id": 0}
 
         # Create job in DB
         job_id = create_job(conn, topic=topic, niche=niche)
+        logger.info("Job #%d created", job_id)
         agent_names = [
             "safety", "researcher", "scriptwriter",
             "voice_producer", "visual_director", "composer", "reviewer",
@@ -77,8 +83,10 @@ class Orchestrator:
             cost_result = g2.evaluate()
 
             # Safety Agent (via delegating method for testability)
+            logger.info("G2: running Safety agent")
             safety_result = self._run_safety(job_id=job_id, topic=topic)
             if safety_result.get("status") == "hard_fail":
+                logger.error("Safety FAILED: %s", safety_result.get("reason"))
                 update_job_status(conn, job_id, "FAILED", safety_result["reason"])
                 return {
                     "status": "failed",
@@ -97,8 +105,10 @@ class Orchestrator:
             g3.evaluate()
 
             # Researcher Agent
+            logger.info("G3: running Researcher agent")
             research_output = self._run_researcher(
                 job_id=job_id, topic=topic, safety_rules=safety_rules,
+                output_dir=output_dir,
             )
 
             # G4: Post-Research Risk
@@ -126,6 +136,7 @@ class Orchestrator:
             g6.evaluate()
 
             # Scriptwriter Agent
+            logger.info("G6: running Scriptwriter agent")
             script_output = self._run_scriptwriter(
                 job_id=job_id,
                 topic=topic,
@@ -145,6 +156,7 @@ class Orchestrator:
             )
 
             # Voice Producer Agent
+            logger.info("G7: running Voice Producer agent")
             voice_output = self._run_voice_producer(
                 job_id=job_id,
                 script=script_output.get("script", []),
@@ -158,6 +170,7 @@ class Orchestrator:
             g8.evaluate(audio_path=first_audio)
 
             # Visual Director Agent
+            logger.info("G8: running Visual Director agent")
             sources_data = research_output.get("sources", {})
             if isinstance(sources_data, dict):
                 research_sources = sources_data.get("sources", [])
@@ -181,6 +194,7 @@ class Orchestrator:
             g9.evaluate(asset_paths=asset_paths)
 
             # Composer Agent
+            logger.info("G9: running Composer agent")
             compose_output = self._run_composer(
                 job_id=job_id,
                 assets=visual_output.get("assets", []),
@@ -190,6 +204,7 @@ class Orchestrator:
 
             # Check composer failure
             if compose_output.get("status") == "failed":
+                logger.error("Composer FAILED: %s", compose_output.get("error"))
                 update_job_status(conn, job_id, "FAILED",
                                   compose_output.get("error", "Composer failed"))
                 return {
@@ -204,6 +219,7 @@ class Orchestrator:
             g10.evaluate(video_path=compose_output.get("video_path"))
 
             # Reviewer Agent
+            logger.info("G10: running Reviewer agent")
             review_output = self._run_reviewer(
                 job_id=job_id,
                 topic=topic,
@@ -234,6 +250,7 @@ class Orchestrator:
                 }
 
             update_job_status(conn, job_id, "COMPLETED")
+            logger.info("Pipeline COMPLETED: job #%d", job_id)
             return {
                 "status": "completed",
                 "job_id": job_id,
@@ -248,6 +265,7 @@ class Orchestrator:
             }
 
         except Exception as e:
+            logger.exception("Pipeline FAILED: job #%d — %s", job_id, e)
             update_job_status(conn, job_id, "FAILED", str(e))
             return {"status": "failed", "error": str(e), "job_id": job_id}
 
@@ -260,10 +278,12 @@ class Orchestrator:
 
     def _run_researcher(self, job_id: int, topic: str,
                         safety_rules: list[str] | None = None,
+                        output_dir: str = "outputs",
                         **kwargs: Any) -> dict[str, Any]:
         agent = ResearcherAgent()
         return agent.execute(job_id=job_id, topic=topic,
-                             safety_rules=safety_rules or [], **kwargs)
+                             safety_rules=safety_rules or [],
+                             output_dir=output_dir, **kwargs)
 
     def _run_scriptwriter(self, job_id: int, topic: str,
                           research_brief: str = "",

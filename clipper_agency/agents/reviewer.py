@@ -1,11 +1,15 @@
 """Reviewer Agent — final content quality and safety review via LLM."""
 
 import json
+import logging
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
+from clipper_agency.config.loader import load_settings
 from clipper_agency.llm.client import OpenRouterClient
+
+logger = logging.getLogger(__name__)
 
 REVIEWER_PROMPT = """You are a content quality reviewer for a TikTok creator channel.
 Review the provided script and caption for:
@@ -47,15 +51,17 @@ class ReviewerAgent(BaseAgent):
         rules = safety_rules or []
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
         scenes = script or []
+        logger.info("Reviewer: scenes=%d", len(scenes))
         script_text = "\n".join(
             f"Scene {s.get('scene', i)}: {s.get('text', '')}"
             for i, s in enumerate(scenes)
         )
 
+        settings = load_settings()
         llm = OpenRouterClient()
         prompt = load_prompt("reviewer", REVIEWER_PROMPT, PROMPTS_DIR)
         response = llm.chat(
-            model="glm-4-9b",
+            model=settings.reviewer_model,
             messages=[
                 {
                     "role": "system",
@@ -76,6 +82,10 @@ class ReviewerAgent(BaseAgent):
             max_tokens=1024,
         )
         review = self._parse_review_response(response["content"])
+        logger.info(
+            "Reviewer: verdict=%s score=%d issues=%d",
+            review["verdict"], review["score"], len(review["issues"]),
+        )
         return {
             "status": review["verdict"],
             "score": review["score"],

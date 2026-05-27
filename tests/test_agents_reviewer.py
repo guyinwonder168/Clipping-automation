@@ -142,7 +142,7 @@ class TestReviewerExecute:
             script=[{"scene": 1, "text": "Test", "duration": 3}],
             caption="Caption",
         )
-        assert mock_chat.call_args.kwargs["model"] == "glm-4-9b"
+        assert mock_chat.call_args.kwargs["model"] == "mimo-v2-flash"
         assert mock_chat.call_args.kwargs["temperature"] == 0.2
 
     def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):

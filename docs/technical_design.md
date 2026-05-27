@@ -1,8 +1,8 @@
 # Clipper Agency — Technical Design Document
 
-**Version:** 3.2
+**Version:** 3.3
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-10)
+**Status:** Final — MVP Implementation Complete (Phase 0-11)
 **Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -48,6 +48,7 @@ Seven MVP agents, each independently configurable and observable. Orchestrator c
 | **Queue** | None/sequential (MVP) → DB-backed → Redis + RQ/Celery | Avoid overhead until multi-account |
 | **LLM Access** | OpenRouter API | Large Language Model (LLM) access, multi-model, single key |
 | **Secrets** | `python-dotenv` + `pydantic-settings` `AppSettings` | `.env` loaded at CLI entry (`__main__.py`); services use `os.getenv()`. No secrets in DB. |
+| **Logging** | Python `logging` + `clipper_agency/core/logging.py` | `setup_logging()` + `get_logger()`. All agents, services, orchestrator, and LLM client log at DEBUG/INFO/ERROR. Configurable via `LOG_LEVEL` env var. |
 | **Prompts** | Filesystem (`prompts/`) | Git-tracked, versioned |
 | **Container** | Docker Compose | VPS-ready |
 
@@ -270,7 +271,7 @@ FAILED → any earlier state (Admin/Creative Lead triggers retry from that point
 | Agent | Role | Cost Tier | Caching |
 |-------|------|-----------|---------|
 | **Safety Agent** | Pre-checks topic. Ultra-cheap model (GLM-4-9B). Hard-blocks illegal/banned/high-risk defamation; soft-warns unverified claims. | Ultra Budget | Not cached |
-| **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators + Firecrawl. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based |
+| **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators (`trim=true` + field extraction, max 20 results) + Firecrawl (lean url/title/desc only). Cache-first: reads `scrapecreators.json`, `firecrawl.json`, `research_brief.json` from job output dir before API calls. Token guard: `MAX_SOURCE_CHARS=40000` prevents LLM overflow. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based + file cache |
 | **Scriptwriter** | Writes script + caption in niche tone. Rotates angle from creative history. Always fresh. | Budget East | Never |
 | **Voice Producer** | Generates voiceover via ElevenLabs. Audio saved as `assets/voiceovers/{job_id}.mp3`. Always fresh. | API cost | Never |
 | **Visual Director** | Selects assets, plans scene sequence. MVP: yt-dlp + Pexels/local fallback. | Budget East | Never |
@@ -483,9 +484,10 @@ Below the agent-default level, the system loads base configuration from `.env` v
 
 - **`AppSettings`** (`pydantic-settings` `BaseSettings`) — typed config class at `clipper_agency/config/schema.py` mapping env vars 1:1 (uppercased) to fields.
 - **`load_dotenv()`** — called once at `clipper_agency/__main__.py` import time, before any service reads `os.getenv()`.
-- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`.
-- **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`.
+- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
+- **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`. Agents read their model from `load_settings().<agent>_model` instead of hardcoding.
 - **Test isolation:** Tests must use both `AppSettings(_env_file=None)` and `patch.dict(os.environ, {}, clear=True)` to prevent the user's `.env` (loaded by `load_dotenv()` at import) from leaking into test expectations.
+- **Cache path helpers:** `clipper_agency/core/paths.py` provides `job_output_dir()`, `research_cache_dir()`, `scrapecreators_cache_file()`, `firecrawl_cache_file()`, `research_brief_cache_file()` for consistent per-job cache paths.
 
 ---
 
@@ -578,7 +580,7 @@ SQLite for MVP (same schema migrates to PostgreSQL). Multi-tenant from day one.
 2. **Orchestrator** — Gated state machine with human-triggered retry
 3. **Creative Memory** — Pre-generation check, variation rotation
 4. **Web Dashboard** — Agent observability, config editing, basic auth + 2 groups
-5. **CLI** — `python3 cli.py run --topic "..." --niche indonesian_artists`
+5. **CLI** — `python3 cli.py run --topic "..." --niche indonesian_artists`; `test-agent` subcommand for independent agent debugging; `--log-level` option
 6. **3 Templates** — News Card, B-Roll Narration, Rapid Update
 7. **Config System** — Agent → Niche → Account → Job hierarchy with versioning
 8. **Output Packager** — `video.mp4` + `caption.txt` + `thumbnail.png` + `metadata.json`

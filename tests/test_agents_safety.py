@@ -133,7 +133,7 @@ class TestSafetyExecute:
         assert "no_defamation" in user_content
         assert call_args.kwargs["temperature"] == 0.1
         assert call_args.kwargs["max_tokens"] == 256
-        assert call_args.kwargs["model"] == "glm-4-9b"
+        assert call_args.kwargs["model"] == "mimo-v2-flash"
 
     def test_execute_defaults_empty_safety_rules(self, mocker):
         mock_chat = mocker.patch(
@@ -157,7 +157,7 @@ class TestSafetyExecute:
         )
         agent = SafetyAgent()
         agent.execute(job_id=1, topic="Test")
-        assert mock_chat.call_args.kwargs["model"] == "glm-4-9b"
+        assert mock_chat.call_args.kwargs["model"] == "mimo-v2-flash"
 
     def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):
         prompts_dir = tmp_path / "prompts"

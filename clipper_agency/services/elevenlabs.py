@@ -1,9 +1,12 @@
 """ElevenLabs text-to-speech service."""
 
+import logging
 import os
 from pathlib import Path
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class ElevenLabsService:
@@ -28,6 +31,7 @@ class ElevenLabsService:
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        logger.info("ElevenLabs: TTS request — voice_id=%s text_len=%d", voice_id, len(text))
         with httpx.Client(base_url=self.BASE_URL, timeout=120) as client:
             resp = client.post(
                 f"/text-to-speech/{voice_id}",
@@ -44,4 +48,5 @@ class ElevenLabsService:
             resp.raise_for_status()
             path.write_bytes(resp.content)
 
+        logger.info("ElevenLabs: saved audio to %s (%d bytes)", output_path, len(resp.content))
         return str(path)

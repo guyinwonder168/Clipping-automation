@@ -4,8 +4,8 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phases 0-10 complete).
-- All 257 tests pass (96% line coverage). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system.
+- **Greenfield project** — early implementation phase (Phases 0-11 complete).
+- All 258 tests pass. 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI.
 
 ## Python Commands
 
@@ -88,7 +88,7 @@ refactor: brief description of refactor
 phase/0-scaffolding     phase/4-agent-framework   phase/8-config-prompts
 phase/1-config          phase/5-agents            phase/9-docker
 phase/2-database        phase/6-orchestrator      phase/10-env-config-fix
-phase/3-services        phase/7-dashboard
+phase/3-services        phase/7-dashboard         phase/11-logging-model-config
 ```
 
 ### Rules
@@ -130,10 +130,10 @@ Topic → Safety → Researcher → Scriptwriter → Voice Producer → Visual D
 
 ```
 docs/
-├── PRD.md                          # Product requirements (v2.0)
-├── SRS.md                          # Software requirements spec (v2.0)
-├── technical_design.md             # Architecture & design (v3.0)
-├── requirements_traceability.md    # Traceability matrix
+├── PRD.md                          # Product requirements (v2.3)
+├── SRS.md                          # Software requirements spec (v2.3)
+├── technical_design.md             # Architecture & design (v3.3)
+├── requirements_traceability.md    # Traceability matrix (v2.3)
 ├── social-media-api-comparison.md  # Research output
 ├── adr/                            # Architecture Decision Records
 │   ├── 0001-use-python-ffmpeg.md
