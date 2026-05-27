@@ -1,8 +1,8 @@
 # Clipper Agency — Requirements Traceability Matrix
 
-**Version:** 2.3
+**Version:** 2.4
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-11)
+**Status:** Final — MVP Implementation Complete (Phases 0-11 + Fish Audio TTS)
 
 ---
 
@@ -110,6 +110,17 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 73 | `clipper_agency/core/paths.py`: shared cache path helpers; `clipper_agency/core/logging.py`: `setup_logging()` + `get_logger()` | Design §9 |
 | 74 | `test-agent` CLI subcommand: runs individual agents independently, bypasses orchestrator DB tracking | SRS §2 FR-19, Design §13 |
 
+### From Fish Audio TTS Implementation (post-Phase 11)
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 75 | Configurable TTS provider: `VoiceProducerAgent._detect_provider()` auto-selects Fish Audio > ElevenLabs > raise error based on env vars | PRD §5 PR-25, SRS §2 FR-06, Design §4, Design §9 |
+| 76 | `FishAudioService`: s2-pro model (`POST /v1/tts`), `reference_id` for voice model, Bearer auth, mp3 output | Design §2, Design §9 |
+| 77 | `_extract_fields()` handles both `aweme_info`-wrapped (full API) and flat (trim=true) responses via `source = item.get("aweme_info") or item`; trimmed responses have no music or hashtags | Design §4, SRS §2 FR-16 |
+| 78 | `AppSettings` fields: `fish_audio_api_key` (validation_alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id` | Design §9, SRS §5 |
+| 79 | Voice provider env var fallback: `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` (Fish Audio), `ELEVENLABS_API_KEY` (ElevenLabs) | SRS §4, Design §9 |
+| 80 | Free tier API blocked for both ElevenLabs (401 abuse detection) and Fish Audio (402 insufficient balance). Both require paid plans. | PRD §3, SRS §4 |
+
 ---
 
 ## Requirements Traceability Matrix
@@ -129,6 +140,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | PR-15 | NFR-04 | §12 Cost | N/A | Model pricing change | Cost recalculation |
 | PR-22 | FR-24 | §9 Config, §9 Env Layer | N/A | Missing model env var | Default to `mimo-v2-flash` |
 | PR-23 | FR-25, NFR-10 | §2 Logging | N/A | Log level misconfigured | Default to INFO |
+| PR-25 | FR-06 | §4 Voice Provider, §9 Env Layer | G8 | Both provider keys missing | Clear error, stop pipeline |
 
 ### MVP P1 Requirements
 

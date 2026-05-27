@@ -5,7 +5,7 @@ Project-specific instructions for AI agents working in this repository.
 ## Repository State
 
 - **Greenfield project** — early implementation phase (Phases 0-11 complete).
-- All 258 tests pass. 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI.
+- All 259 tests pass (1 pre-existing `test_full_pipeline_smoke` failure requires FFmpeg + API keys). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI + configurable TTS provider (ElevenLabs/Fish Audio auto-detect).
 
 ## Python Commands
 
@@ -121,7 +121,7 @@ Topic → Safety → Researcher → Scriptwriter → Voice Producer → Visual D
 | Video     | FFmpeg 5.0+ (CPU-only, no GPU) |
 | Database  | SQLite (WAL mode, advisory locks) |
 | LLM       | OpenRouter API (multi-model routing) |
-| Voice     | ElevenLabs |
+| Voice     | ElevenLabs / Fish Audio (auto-detect) |
 | Media     | yt-dlp (primary), Pexels (fallback) |
 | Research  | ScrapeCreators + Firecrawl |
 | Auth      | Basic auth, 2 groups (privileged, creative/ops) |

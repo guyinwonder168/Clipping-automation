@@ -1,8 +1,8 @@
 # Clipper Agency — Product Requirements Document
 
-**Version:** 2.3
+**Version:** 2.4
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-11)
+**Status:** Final — MVP Implementation Complete (Phases 0-11 + Fish Audio TTS)
 **Related:** `docs/SRS.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -38,7 +38,7 @@ Clipper Agency automates short-form video content production for social media. T
 | **Upload** | Manual (no TikTok API posting) |
 | **Media** | yt-dlp download (Layer 1 primary); Pexels fallback when no source URL or download fails; local user asset path accepted |
 | **Research** | ScrapeCreators (TikTok video/music) + Firecrawl (context/news) |
-| **Voice** | One configured ElevenLabs voice ID |
+| **Voice** | One configured voice ID (ElevenLabs or Fish Audio, auto-detected) |
 | **Auth** | Basic auth + 2 groups (privileged, creative/ops) |
 | **Retry** | Human-triggered only. No auto-retry loops. |
 | **Runtime** | Local machine, Docker-ready for VPS |
@@ -98,6 +98,7 @@ Every successful job produces:
 | PR-22 | Per-agent model configuration via environment variables | P0 | MVP |
 | PR-23 | Structured logging for all external API calls, agent executions, and pipeline state transitions | P0 | MVP |
 | PR-24 | `test-agent` CLI subcommand for independent agent testing/debugging | P1 | MVP |
+| PR-25 | Configurable TTS provider (ElevenLabs or Fish Audio) auto-detected from env vars with fallback logic | P0 | MVP |
 
 ---
 
@@ -136,7 +137,7 @@ Safety always overrides cost saving.
 | Research quota exhausted | Ask Admin/Creative Lead for source URL or use Pexels/generated cards. |
 | yt-dlp download fails | Try next source URL (max 5 attempts). If none: Pexels/local asset/generated cards. |
 | Fewer than 2 usable sources | Proceed with 1 source + Pexels/generated cards. Log risk warning. |
-| ElevenLabs fails | Stop. Admin/Creative Lead triggers retry. Max 3 retries per job. |
+| Voice provider fails | Stop. Admin/Creative Lead triggers retry. Max 3 retries per job. |
 | FFmpeg render fails | Stop. Admin/Creative Lead triggers retry. Max 3 retries per job. |
 | Reviewer rejects | Recommend which step to retry. Admin/Creative Lead triggers. Max 2 retries. |
 | Variation exhausted | MVP: Admin/Creative Lead review required. Stage 2: Creative Director. |
@@ -222,6 +223,8 @@ When no source clips or stock footage are available, the Visual Director generat
 | Agentic East | ~$0.008 | ~$0.03 | ~$0.038 |
 | Premium East | ~$0.015 | ~$0.03 | ~$0.045 |
 | Premium West | ~$0.04 | ~$0.03 | ~$0.07 |
+
+> **Voice cost note:** Costs vary by provider. Fish Audio ($15/1M chars) is ~6.7× cheaper than ElevenLabs ($100/1M chars). At ~200 chars/video, Fish Audio costs ~$0.003 vs ElevenLabs ~$0.02/video. Estimates above use ElevenLabs pricing as baseline. Both providers currently require paid plans (no free API tier).
 
 ### Financial Visibility
 

@@ -1,8 +1,8 @@
 # Clipper Agency — Software Requirements Specification
 
-**Version:** 2.3
+**Version:** 2.4
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-11)
+**Status:** Final — MVP Implementation Complete (Phases 0-11 + Fish Audio TTS)
 **Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -33,7 +33,7 @@
 | FR-03 | Researcher Agent gathers context + source URLs + music candidates via ScrapeCreators + Firecrawl | P0 | MVP |
 | FR-04 | Post-research risk gate: second safety check after real entities/claims/URLs are known | P0 | MVP |
 | FR-05 | Scriptwriter Agent writes script + caption in niche tone, rotates angle from creative history | P0 | MVP |
-| FR-06 | Voice Producer generates voiceover via ElevenLabs only after script passes validation | P0 | MVP |
+| FR-06 | Voice Producer generates voiceover via configured TTS provider (ElevenLabs or Fish Audio, auto-detected) only after script passes validation | P0 | MVP |
 | FR-07 | Visual Director downloads assets via yt-dlp + Pexels/local fallback, plans scene sequence | P0 | MVP |
 | FR-08 | Composer assembles video via FFmpeg: scenes, transitions, captions, audio mixing, thumbnail | P0 | MVP |
 | FR-09 | Reviewer Agent performs quality + safety + duplicate check (multimodal). Max 2 retries by Admin/Creative Lead | P0 | MVP |
@@ -92,7 +92,8 @@
 | Service | Purpose | Auth | Rate/Credits |
 |---------|---------|------|--------------|
 | OpenRouter | LLM access for all agents | API key | Per-model limits |
-| ElevenLabs | Voice generation | API key | Free tier sufficient for MVP; 1 default voice ID |
+| ElevenLabs | Voice generation (primary) | API key | Free tier blocked — Starter plan ($5/mo) required for API access |
+| Fish Audio | Voice generation (auto-detected alternative) | API key (`FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY`) | No free tier — Plus plan ($11/mo) required for API access |
 | Pexels API | Stock video/images fallback | API key (free) | 200 requests/hr |
 | yt-dlp | Video/audio download from 1000+ sites | None | Site-specific limits |
 | ScrapeCreators | TikTok video URLs, creator data, song metadata | API key (`x-api-key`) | 75 free credits; `trim=true` + field extraction reduces 1-2MB raw responses to ~500 chars/result |
@@ -106,6 +107,11 @@ Cache → ScrapeCreators (TikTok video/music) + Firecrawl (context/news)
 → If no source URL: Pexels/local asset/generated cards
 Stage 2: + Serper. Stage 2+: + DuckDuckGo site-filtered.
 ```
+
+**Voice provider auto-detection:** `Fish Audio > ElevenLabs > raise error`.
+- `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` set → use `FishAudioService` (s2-pro model, `/v1/tts` endpoint).
+- `ELEVENLABS_API_KEY` set (and no Fish Audio key) → use `ElevenLabsService`.
+- Neither set → pipeline stops with clear error.
 
 ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagement data, and song metadata. Results cached with TTL to minimize credit burn. Researcher caches ScrapeCreators JSON, Firecrawl results, and research briefs per job output directory.
 
@@ -218,6 +224,7 @@ ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagem
 | Container | Dockerfile + docker-compose.yml | Same |
 | CLI | `python3 cli.py run --topic "..."`; `python3 -m clipper_agency test-agent <AGENT> [OPTS]`; `--log-level` option | Same + `test-agent` for debugging |
 | Dashboard | Flask/FastAPI + basic auth + 2 groups | Same + full role auth |
+| Voice | ElevenLabs or Fish Audio, auto-detected from env vars | Same |
 
 ### Scaling Path
 

@@ -1,8 +1,8 @@
 # Clipper Agency — Technical Design Document
 
-**Version:** 3.3
+**Version:** 3.4
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-11)
+**Status:** Final — MVP Implementation Complete (Phases 0-11 + Fish Audio TTS)
 **Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -58,6 +58,7 @@ Seven MVP agents, each independently configurable and observable. Orchestrator c
 |---------|---------|
 | OpenRouter | LLM for all agents |
 | ElevenLabs | Voice generation |
+| Fish Audio | Voice generation (auto-detected alternative) |
 | Pexels API | Stock video/images fallback |
 | yt-dlp | Source video/audio download |
 | ScrapeCreators | TikTok video URL + song metadata |
@@ -100,7 +101,7 @@ Stage 2+:
 9.  Gate G6: Creative Memory Gate
 10. Agent A3: Scriptwriter
 11. Gate G7: Script Validation Gate
-12. Agent A4: Voice Producer (ElevenLabs)
+12. Agent A4: Voice Producer (ElevenLabs or Fish Audio, auto-detected)
 13. Gate G8: Audio Validation Gate
 14. Agent A5: Visual Director (yt-dlp + fallback)
 15. Gate G9: Asset Validation Gate
@@ -271,9 +272,9 @@ FAILED → any earlier state (Admin/Creative Lead triggers retry from that point
 | Agent | Role | Cost Tier | Caching |
 |-------|------|-----------|---------|
 | **Safety Agent** | Pre-checks topic. Ultra-cheap model (GLM-4-9B). Hard-blocks illegal/banned/high-risk defamation; soft-warns unverified claims. | Ultra Budget | Not cached |
-| **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators (`trim=true` + field extraction, max 20 results) + Firecrawl (lean url/title/desc only). Cache-first: reads `scrapecreators.json`, `firecrawl.json`, `research_brief.json` from job output dir before API calls. Token guard: `MAX_SOURCE_CHARS=40000` prevents LLM overflow. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based + file cache |
+| **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators (`trim=true` + field extraction via `_extract_fields()` handling both `aweme_info`-wrapped and flat trimmed responses, max 20 results) + Firecrawl (lean url/title/desc only). Cache-first: reads `scrapecreators.json`, `firecrawl.json`, `research_brief.json` from job output dir before API calls. Token guard: `MAX_SOURCE_CHARS=40000` prevents LLM overflow. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based + file cache |
 | **Scriptwriter** | Writes script + caption in niche tone. Rotates angle from creative history. Always fresh. | Budget East | Never |
-| **Voice Producer** | Generates voiceover via ElevenLabs. Audio saved as `assets/voiceovers/{job_id}.mp3`. Always fresh. | API cost | Never |
+| **Voice Producer** | Generates voiceover via configured TTS provider (ElevenLabs or Fish Audio, auto-detected). Provider dispatch: `Fish Audio > ElevenLabs > raise error`. `FishAudioService` uses `s2-pro` model, `POST /v1/tts`, `reference_id` for voice model. Audio saved as `assets/voiceovers/{job_id}.mp3`. Always fresh. | API cost | Never |
 | **Visual Director** | Selects assets, plans scene sequence. MVP: yt-dlp + Pexels/local fallback. | Budget East | Never |
 | **Composer** | FFmpeg assembly: scenes, transitions, captions, audio mixing, thumbnail. | N/A | Never |
 | **Reviewer** | Quality + safety + duplicate check. Multimodal (video + text). Max 2 human-triggered retries. | Moderate | Never |
@@ -299,7 +300,7 @@ Query construction is config-driven: the niche profile defines search terms, lan
 | **Safety** | Topic string, niche safety_rules | Pass/soft-warning/hard-fail + reason | Hard-fail stops pipeline |
 | **Researcher** | Topic, niche config, cached research (if fresh) | Structured output (see YAML below) | Empty result → G5 handles |
 | **Scriptwriter** | Researcher output (topic_brief, context_sources, tags, risk_flags), creative history (used angles) | Script text, caption text, selected angle | N/A (always produces output) |
-| **Voice Producer** | Validated script text, voice_id from config | Audio file at `assets/voiceovers/{job_id}.mp3`, duration | API failure → stop, retry by Admin/Creative Lead |
+| **Voice Producer** | Validated script text, voice_id from config, TTS provider auto-detected from env vars (Fish Audio > ElevenLabs) | Audio file at `assets/voiceovers/{job_id}.mp3`, duration | API failure → stop, retry by Admin/Creative Lead |
 | **Visual Director** | Researcher video_sources, Pexels query from tags, local asset paths, generated card config | Scene plan (ordered list: clip paths, timestamps, overlays), downloaded assets | Download failures → G9 handles |
 | **Composer** | Validated audio file, scene plan, template config, caption text | Rendered video at `outputs/{job_id}.mp4`, thumbnail | FFmpeg failure → stop, retry by Admin/Creative Lead |
 | **Reviewer** | Rendered video file, script text, caption, creative history | Pass/reject + specific issues + recommended retry step | Reject → Admin/Creative Lead decides |
@@ -484,10 +485,23 @@ Below the agent-default level, the system loads base configuration from `.env` v
 
 - **`AppSettings`** (`pydantic-settings` `BaseSettings`) — typed config class at `clipper_agency/config/schema.py` mapping env vars 1:1 (uppercased) to fields.
 - **`load_dotenv()`** — called once at `clipper_agency/__main__.py` import time, before any service reads `os.getenv()`.
-- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
+- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `fish_audio_api_key` (alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
 - **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`. Agents read their model from `load_settings().<agent>_model` instead of hardcoding.
 - **Test isolation:** Tests must use both `AppSettings(_env_file=None)` and `patch.dict(os.environ, {}, clear=True)` to prevent the user's `.env` (loaded by `load_dotenv()` at import) from leaking into test expectations.
 - **Cache path helpers:** `clipper_agency/core/paths.py` provides `job_output_dir()`, `research_cache_dir()`, `scrapecreators_cache_file()`, `firecrawl_cache_file()`, `research_brief_cache_file()` for consistent per-job cache paths.
+
+#### Voice Provider Auto-Detection
+
+The `VoiceProducerAgent` selects its TTS provider at runtime via `_detect_provider()`:
+
+| Priority | Env Var | Service | Model |
+|----------|---------|---------|-------|
+| 1 (highest) | `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` | `FishAudioService` | `s2-pro` via `POST /v1/tts` |
+| 2 | `ELEVENLABS_API_KEY` | `ElevenLabsService` | Configured voice ID |
+
+- **Fallback voice IDs** per provider: `fish_audio_voice_id` (env) or `elevenlabs_voice_id` (env).
+- If no provider key is found, the agent raises a clear error and the pipeline stops.
+- Provider-specific `voice_id` field means both providers can be configured simultaneously; switching requires only env var order change.
 
 ---
 
