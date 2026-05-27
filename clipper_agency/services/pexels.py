@@ -43,7 +43,7 @@ class PexelsService:
             resp.raise_for_status()
             data = resp.json()
             videos = data.get("videos", [])
-            logger.info("Pexels: found %d videos for '%s'", len(videos), query)
+            logger.info("Pexels: found %d videos", len(videos))
             return [
                 {
                     "id": v["id"],

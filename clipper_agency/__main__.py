@@ -138,6 +138,46 @@ def jobs() -> None:
 AGENT_NAMES = ["safety", "researcher", "scriptwriter", "voice", "visual", "composer", "reviewer"]
 
 
+def _parse_script(script: str | None, fallback: list[dict]) -> list[dict]:
+    """Parse JSON script string or return fallback."""
+    import json
+    return json.loads(script) if script else fallback
+
+
+def _run_safety(instance: object, topic: str, rules: list[str]) -> dict:
+    return instance.execute(job_id=0, topic=topic, safety_rules=rules)
+
+
+def _run_researcher(instance: object, topic: str, rules: list[str], max_results: int, output_dir: str) -> dict:
+    return instance.execute(job_id=0, topic=topic, safety_rules=rules, max_results=max_results, output_dir=output_dir)
+
+
+def _run_scriptwriter(instance: object, topic: str, rules: list[str], brief: str) -> dict:
+    return instance.execute(job_id=0, topic=topic, research_brief=brief, safety_rules=rules)
+
+
+def _run_voice(instance: object, script: str | None, output_dir: str) -> dict:
+    parsed = _parse_script(script, [{"scene": 1, "text": "Test voice output.", "duration": 5}])
+    return instance.execute(job_id=0, script=parsed, output_dir=output_dir)
+
+
+def _run_visual(instance: object, topic: str, script: str | None, auto_research_output: dict, output_dir: str) -> dict:
+    parsed = _parse_script(script, [{"scene": 1, "duration": 5}])
+    source_urls = auto_research_output.get("sources", {}).get("sources", [])
+    urls = [s.get("share_url", "") for s in source_urls if isinstance(s, dict)]
+    return instance.execute(job_id=0, script=parsed, topic=topic, source_urls=urls, output_dir=output_dir)
+
+
+def _run_composer(instance: object, script: str | None, output_dir: str) -> dict:
+    parsed = _parse_script(script, [{"scene": 1, "duration": 5}])
+    return instance.execute(job_id=0, assets=parsed, audio_files=[], output_dir=output_dir)
+
+
+def _run_reviewer(instance: object, topic: str, script: str | None, caption: str, rules: list[str]) -> dict:
+    parsed = _parse_script(script, [{"scene": 1, "text": "Test review content.", "duration": 5}])
+    return instance.execute(job_id=0, topic=topic, script=parsed, caption=caption, safety_rules=rules)
+
+
 def _dispatch_test_agent(
     agent: str,
     instance: object,
@@ -151,38 +191,21 @@ def _dispatch_test_agent(
     output_dir: str,
 ) -> dict:
     """Execute the selected agent and return its result dict."""
-    import json
+    brief = research_brief or auto_research_output.get("research_brief", "No research brief provided.")
 
-    if agent == "safety":
-        return instance.execute(job_id=0, topic=topic, safety_rules=rules)
+    dispatch = {
+        "safety": lambda: _run_safety(instance, topic, rules),
+        "researcher": lambda: _run_researcher(instance, topic, rules, max_results, output_dir),
+        "scriptwriter": lambda: _run_scriptwriter(instance, topic, rules, brief),
+        "voice": lambda: _run_voice(instance, script, output_dir),
+        "visual": lambda: _run_visual(instance, topic, script, auto_research_output, output_dir),
+        "composer": lambda: _run_composer(instance, script, output_dir),
+        "reviewer": lambda: _run_reviewer(instance, topic, script, caption, rules),
+    }
 
-    if agent == "researcher":
-        return instance.execute(
-            job_id=0, topic=topic, safety_rules=rules,
-            max_results=max_results, output_dir=output_dir,
-        )
-
-    if agent == "scriptwriter":
-        brief = research_brief or auto_research_output.get("research_brief", "No research brief provided.")
-        return instance.execute(job_id=0, topic=topic, research_brief=brief, safety_rules=rules)
-
-    if agent == "voice":
-        parsed_script = json.loads(script) if script else [{"scene": 1, "text": "Test voice output for pipeline verification.", "duration": 5}]
-        return instance.execute(job_id=0, script=parsed_script, output_dir=output_dir)
-
-    if agent == "visual":
-        parsed_script = json.loads(script) if script else [{"scene": 1, "duration": 5}]
-        source_urls = auto_research_output.get("sources", {}).get("sources", [])
-        urls = [s.get("share_url", "") for s in source_urls if isinstance(s, dict)]
-        return instance.execute(job_id=0, script=parsed_script, topic=topic, source_urls=urls, output_dir=output_dir)
-
-    if agent == "composer":
-        parsed_script = json.loads(script) if script else [{"scene": 1, "duration": 5}]
-        return instance.execute(job_id=0, assets=parsed_script, audio_files=[], output_dir=output_dir)
-
-    if agent == "reviewer":
-        parsed_script = json.loads(script) if script else [{"scene": 1, "text": "Test review content.", "duration": 5}]
-        return instance.execute(job_id=0, topic=topic, script=parsed_script, caption=caption, safety_rules=rules)
+    handler = dispatch.get(agent)
+    if handler:
+        return handler()
 
     click.echo(f"Unknown agent: {agent}")
     return {}

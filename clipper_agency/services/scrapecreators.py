@@ -72,17 +72,9 @@ class ScrapeCreatorsService:
         )
         return extracted
 
-    def _extract_fields(self, item: dict[str, Any]) -> dict[str, Any] | None:
-        """Extract only pipeline-relevant fields from a raw TikTok item."""
-        aweme = item.get("aweme_info", {})
-        if not aweme:
-            return None
-
-        desc = aweme.get("desc", "")
-        if desc:
-            desc = desc[:self.MAX_CHARS_PER_DESC]
-
-        # Video download URLs (best quality first)
+    @staticmethod
+    def _extract_video_urls(aweme: dict[str, Any]) -> dict[str, str]:
+        """Extract video download URLs (best quality first)."""
         video_urls: dict[str, str] = {}
         video = aweme.get("video", {})
         bit_rates = video.get("bit_rate", []) or []
@@ -93,20 +85,30 @@ class ScrapeCreatorsService:
                 quality = br.get("quality_type") or ""
                 label = gear or (f"{quality}p" if quality else "default")
                 video_urls[label] = url_list[0]
+        return video_urls
 
-        # Music / audio metadata
-        music = aweme.get("music", {})
-        music_info: dict[str, str] = {}
-        if music:
-            music_info = {
-                "title": music.get("title", ""),
-                "author": music.get("author", ""),
-            }
+    @staticmethod
+    def _extract_music(music: dict[str, Any]) -> dict[str, str]:
+        """Extract music/audio metadata."""
+        if not music:
+            return {}
+        return {
+            "title": music.get("title", ""),
+            "author": music.get("author", ""),
+        }
 
-        # Statistics
+    def _extract_fields(self, item: dict[str, Any]) -> dict[str, Any] | None:
+        """Extract only pipeline-relevant fields from a raw TikTok item."""
+        aweme = item.get("aweme_info", {})
+        if not aweme:
+            return None
+
+        desc = aweme.get("desc", "")
+        if desc:
+            desc = desc[:self.MAX_CHARS_PER_DESC]
+
         stats = aweme.get("statistics", {}) or {}
 
-        # Hashtags
         hashtags = [
             c.get("cha_name", "")
             for c in (aweme.get("cha_list", []) or [])
@@ -124,7 +126,7 @@ class ScrapeCreatorsService:
             "plays": stats.get("play_count", 0),
             "url": share_url,           # orchestrator reads this key for source_urls
             "share_url": share_url,
-            "video_urls": video_urls,
-            "music": music_info,
+            "video_urls": self._extract_video_urls(aweme),
+            "music": self._extract_music(aweme.get("music", {})),
             "hashtags": hashtags,
         }
