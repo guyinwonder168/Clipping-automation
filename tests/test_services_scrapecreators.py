@@ -75,3 +75,53 @@ def test_search_tiktok_videos(mock_httpx):
     assert results[0]["video_urls"] == {"720p": "https://cdn.example.com/video.mp4"}
     assert results[0]["music"] == {"title": "Trending Beat", "author": "DJ Producer"}
     assert results[0]["hashtags"] == ["music", "trending"]
+
+
+@patch("httpx.Client")
+def test_search_tiktok_videos_trimmed(mock_httpx):
+    """Trim=true responses have fields at top level (no aweme_info wrapper)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "search_item_list": [
+            {
+                "aweme_id": "video456",
+                "desc": "Trimmed artist clip #viral",
+                "url": "https://tiktok.com/@test/video/456",
+                "author": {"unique_id": "trim_creator"},
+                "statistics": {
+                    "digg_count": 5000,
+                    "play_count": 25000,
+                    "comment_count": 100,
+                    "share_count": 25,
+                },
+                "video": {
+                    "bit_rate": [
+                        {
+                            "gear_name": "1080p",
+                            "play_addr": {
+                                "url_list": ["https://cdn.example.com/trim.mp4"]
+                            }
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    mock_httpx.return_value.__enter__.return_value.get.return_value = mock_response
+
+    with patch.dict("os.environ", {"SCRAPECREATORS_API_KEY": "test-key"}):
+        svc = ScrapeCreatorsService()
+        results = svc.search_tiktok_videos("artist news")
+
+    assert len(results) == 1
+    assert results[0]["desc"] == "Trimmed artist clip #viral"
+    assert results[0]["author"] == "trim_creator"
+    assert results[0]["likes"] == 5000
+    assert results[0]["plays"] == 25000
+    # Trim mode uses 'url' instead of 'share_url' at top level
+    assert results[0]["url"] == "https://tiktok.com/@test/video/456"
+    assert results[0]["video_urls"] == {"1080p": "https://cdn.example.com/trim.mp4"}
+    # Trim mode has no music or cha_list
+    assert results[0]["music"] == {}
+    assert results[0]["hashtags"] == []

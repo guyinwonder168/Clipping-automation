@@ -98,35 +98,41 @@ class ScrapeCreatorsService:
         }
 
     def _extract_fields(self, item: dict[str, Any]) -> dict[str, Any] | None:
-        """Extract only pipeline-relevant fields from a raw TikTok item."""
-        aweme = item.get("aweme_info", {})
-        if not aweme:
+        """Extract only pipeline-relevant fields from a raw TikTok item.
+
+        Handles both ``aweme_info``-wrapped responses (full API) and
+        flat responses (``trim=true``).
+        """
+        source = item.get("aweme_info") or item
+        if not source:
             return None
 
-        desc = aweme.get("desc", "")
+        desc = source.get("desc", "")
         if desc:
             desc = desc[:self.MAX_CHARS_PER_DESC]
 
-        stats = aweme.get("statistics", {}) or {}
+        stats = source.get("statistics", {}) or {}
 
         hashtags = [
             c.get("cha_name", "")
-            for c in (aweme.get("cha_list", []) or [])
+            for c in (source.get("cha_list", []) or [])
             if c.get("cha_name")
         ]
 
-        share_url = aweme.get("share_url", "")
+        # Trim mode uses "url" instead of "share_url", has no music key
+        share_url = source.get("share_url") or source.get("url", "")
+        music = self._extract_music(source.get("music", {})) if source.get("music") else {}
 
         return {
             "desc": desc,
-            "author": (aweme.get("author", {}) or {}).get("unique_id", ""),
+            "author": (source.get("author", {}) or {}).get("unique_id", ""),
             "likes": stats.get("digg_count", 0),
             "comments": stats.get("comment_count", 0),
             "shares": stats.get("share_count", 0),
             "plays": stats.get("play_count", 0),
             "url": share_url,           # orchestrator reads this key for source_urls
             "share_url": share_url,
-            "video_urls": self._extract_video_urls(aweme),
-            "music": self._extract_music(aweme.get("music", {})),
+            "video_urls": self._extract_video_urls(source),
+            "music": music,
             "hashtags": hashtags,
         }

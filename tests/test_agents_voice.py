@@ -17,6 +17,7 @@ class TestVoiceProducerGenerate:
     """Voice generation with mocked ElevenLabs."""
 
     def test_execute_generates_voice_files(self, mocker):
+        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
             return_value="/tmp/output/job_1/scene_0.mp3",
@@ -37,6 +38,7 @@ class TestVoiceProducerGenerate:
         assert len(result["audio_files"]) == 2
 
     def test_generate_passes_correct_params(self, mocker):
+        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
             return_value="/tmp/output/job_1/scene_0.mp3",
@@ -55,6 +57,7 @@ class TestVoiceProducerGenerate:
         )
 
     def test_execute_defaults_voice_id(self, mocker):
+        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
             return_value="/tmp/output/job_1/scene_0.mp3",
@@ -66,11 +69,11 @@ class TestVoiceProducerGenerate:
             output_dir="/tmp/output",
         )
         assert result["status"] == "completed"
-        # Should default to Adam voice
         call_kwargs = mock_generate.call_args
         assert call_kwargs[0][1] == "21m00Tcm4TlvDq8ikWAM"
 
     def test_execute_handles_empty_script(self, mocker):
+        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
         )
@@ -85,6 +88,7 @@ class TestVoiceProducerGenerate:
         mock_generate.assert_not_called()
 
     def test_execute_handles_elevenlabs_failure(self, mocker):
+        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
         def failing_generate(text, voice_id, output_path):
             raise Exception("ElevenLabs API error")
 

@@ -69,6 +69,7 @@ class AppSettings(BaseSettings):
     # API keys
     openrouter_api_key: str = ""
     elevenlabs_api_key: str = ""
+    fish_audio_api_key: str = Field(default="", validation_alias="FISHAUDIO_KEY")
     pexels_api_key: str = ""
     firecrawl_api_key: str = ""
     scrapecreators_api_key: str = ""
@@ -89,6 +90,10 @@ class AppSettings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+
+    # TTS provider configuration (Fish Audio or ElevenLabs)
+    fish_audio_voice_id: str = ""   # Fish Audio reference_id (voice model)
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
 
     # Debug / dev
     debug: bool = False
