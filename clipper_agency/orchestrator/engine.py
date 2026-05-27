@@ -211,6 +211,7 @@ class Orchestrator:
                 assets=visual_output.get("assets", []),
                 audio_files=voice_output.get("audio_files", []),
                 output_dir=output_dir,
+                assets_cache=assets_cache,
             )
 
             # Check composer failure

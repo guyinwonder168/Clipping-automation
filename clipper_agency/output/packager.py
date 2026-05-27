@@ -25,7 +25,7 @@ class OutputPackager:
             out = Path(output_dir) / f"job_{job_id}"
             out.mkdir(parents=True, exist_ok=True)
 
-            final_video = out / "final.mp4"
+            final_video = out / "video.mp4"
             final_caption = out / "caption.txt"
             final_thumbnail = out / "thumbnail.png"
             meta_file = out / "metadata.json"

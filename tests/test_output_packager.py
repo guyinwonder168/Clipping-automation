@@ -72,7 +72,7 @@ class TestPackagerFileCopy:
             metadata={"topic": "Test"},
             output_dir=output_dir,
         )
-        expected_files = {"final.mp4", "metadata.json"}
+        expected_files = {"video.mp4", "metadata.json"}
         actual_files = set(os.listdir(str(Path(output_dir) / "job_3")))
         assert expected_files.issubset(actual_files)
 

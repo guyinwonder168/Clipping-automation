@@ -2,9 +2,16 @@
 
 import logging
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
+from clipper_agency.core.artifacts import write_json
+from clipper_agency.core.paths import (
+    agent_input_file,
+    agent_output_file,
+    ensure_agent_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +34,16 @@ class ComposerAgent(BaseAgent):
         video_assets = assets or []
         voice_files = audio_files or []
 
+        assets_cache = kwargs.get("assets_cache", "")
+        agent_dir = ""
+        if assets_cache:
+            agent_dir = ensure_agent_dir(assets_cache, job_id, "composer")
+            write_json(agent_input_file(assets_cache, job_id, "composer"), {
+                "job_id": job_id,
+                "video_asset_count": len(video_assets),
+                "audio_file_count": len(voice_files),
+            })
+
         logger.info(
             "Composer: %d video assets, %d audio files",
             len(video_assets), len(voice_files),
@@ -40,24 +57,38 @@ class ComposerAgent(BaseAgent):
                 "thumbnail_path": "",
             }
 
-        video_path = f"{output_dir}/job_{job_id}/final.mp4"
+        video_path = f"{output_dir}/job_{job_id}/video.mp4"
         thumbnail_path = f"{output_dir}/job_{job_id}/thumbnail.png"
 
         try:
-            self._assemble_video(video_assets, voice_files, video_path)
+            ffmpeg_cmd = self._assemble_video(video_assets, voice_files, video_path)
             self._generate_thumbnail(video_path, thumbnail_path)
+
+            if agent_dir:
+                self._persist_diagnostics(agent_dir, ffmpeg_cmd, "")
+
             logger.info(
                 "Composer: completed — video=%s thumbnail=%s",
                 video_path, thumbnail_path,
             )
-            return {
+
+            output = {
                 "status": "completed",
                 "video_path": video_path,
                 "thumbnail_path": thumbnail_path,
             }
+            if agent_dir:
+                write_json(agent_output_file(assets_cache, job_id, "composer"),
+                            output)
+            return output
         except subprocess.CalledProcessError as e:
-            stderr_text = (e.stderr or "").strip()
+            stderr_raw = e.stderr or b""
+            stderr_text = stderr_raw.strip()
+            if isinstance(stderr_text, bytes):
+                stderr_text = stderr_text.decode()
             logger.error("Composer: FFmpeg failed — %s", stderr_text[:500])
+            if agent_dir:
+                self._persist_diagnostics(agent_dir, getattr(e, 'cmd', []), stderr_text)
             return {
                 "status": "failed",
                 "error": stderr_text or str(e),
@@ -72,6 +103,17 @@ class ComposerAgent(BaseAgent):
                 "video_path": video_path,
                 "thumbnail_path": "",
             }
+
+    def _persist_diagnostics(self, agent_dir: str, ffmpeg_cmd: list | str,
+                              stderr_text: str) -> None:
+        """Save FFmpeg command and stderr to agent artifact directory."""
+        cmd_str = " ".join(ffmpeg_cmd) if isinstance(ffmpeg_cmd, list) else str(ffmpeg_cmd)
+        cmd_file = Path(agent_dir) / "ffmpeg_command.txt"
+        cmd_file.write_text(cmd_str)
+
+        if stderr_text:
+            log_file = Path(agent_dir) / "ffmpeg_stderr.log"
+            log_file.write_text(stderr_text)
 
     def _build_filter(
         self, assets: list[dict], audio_files: list[str]
@@ -103,10 +145,10 @@ class ComposerAgent(BaseAgent):
 
     def _assemble_video(
         self, assets: list[dict], audio_files: list[str], output_path: str
-    ) -> None:
+    ) -> list[str]:
         video_inputs = [a for a in assets if a.get("path")]
         if not video_inputs:
-            return
+            return []
 
         cmd = ["ffmpeg", "-y"]
         for v in video_inputs:
@@ -129,6 +171,7 @@ class ComposerAgent(BaseAgent):
         ])
 
         subprocess.run(cmd, check=True, capture_output=True, text=True)
+        return cmd
 
     def _generate_thumbnail(self, video_path: str, thumbnail_path: str) -> None:
         cmd = [
