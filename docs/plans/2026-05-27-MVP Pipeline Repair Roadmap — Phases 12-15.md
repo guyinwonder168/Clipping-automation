@@ -1,10 +1,10 @@
-# Artifact Layout and Agent Contract Repair Implementation Plan
+# MVP Pipeline Repair Roadmap — Phases 12-15
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Repair the pipeline so intermediate artifacts live in a restartable `ASSETS_CACHE/job_{id}` workspace, final deliverables live in `OUTPUT_DIR/job_{id}`, every agent/gate result is persisted, and TTS provider fallback works as `ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly`.
+**Goal:** Repair the MVP pipeline across Phases 12-15 so it matches the PRD/SRS/technical design: restartable job workspaces, persisted agent/gate contracts, retry/resume, correct media composition, template-driven rendering, and useful dashboard/CLI observability.
 
-**Architecture:** Introduce a canonical per-job workspace under `settings.assets_cache`, persist each agent's `input.json`/`output.json` plus agent-specific files, persist every gate result, and keep `settings.output_dir` only for final customer-ready packages. Keep raw provider responses separate from normalized machine contracts so failed jobs can be inspected, resumed, and audited without re-calling paid APIs.
+**Architecture:** Implement the cleanup as four reviewable MVP repair phases. Phase 12 creates the canonical per-job workspace under `settings.assets_cache`, persists each agent's `input.json`/`output.json`, persists every gate result, and keeps `settings.output_dir` only for final customer-ready packages. Phase 13 adds retry/resume and cache reuse. Phase 14 repairs media/composer correctness. Phase 15 completes template-driven rendering and full observability.
 
 **Tech Stack:** Python 3.11, pydantic-settings, SQLite, pytest, httpx, FFmpeg, yt-dlp, Pexels, ScrapeCreators, Firecrawl, ElevenLabs, Google AI Studio Gemini TTS, Fish Audio.
 
@@ -28,6 +28,19 @@ Current implementation drifted from `docs/PRD.md`, `docs/SRS.md`, `docs/technica
 - Fish Audio was added, but required provider priority is now ElevenLabs first, Gemini TTS second, Fish Audio third.
 - Research brief should be Markdown, not JSON.
 - Raw ScrapeCreators and Firecrawl responses should be preserved as real provider response JSON.
+
+## MVP Repair Phase Roadmap
+
+This is one roadmap for the remaining MVP cleanup. Each phase should still be implemented as its own branch/PR for reviewability.
+
+| Phase | Name | MVP Gap Fixed | Expected Branch |
+|---|---|---|---|
+| 12 | Artifact contracts + debug observability | Makes jobs inspectable, restartable in principle, and auditable. Fixes artifact layout, agent/gate dumps, DB state transitions, debug dashboard, and debug CLI. | `phase/12-artifact-layout-agent-contracts` |
+| 13 | Retry/resume + cache reuse | Makes jobs actually restartable at stages without wasting paid API calls. Adds `job-retry`, `job-resume`, config snapshots, and artifact reuse validation. | `phase/13-retry-resume-cache-reuse` |
+| 14 | Media/composer correctness | Makes generated videos satisfy MVP output requirements: 9:16, 1080x1920, 20-60s, audio track, valid clips, generated card fallback, thumbnail, metadata stripping. | `phase/14-media-composer-correctness` |
+| 15 | Template rendering + full observability | Makes the three MVP templates real and upgrades dashboard from debug-first to production-useful observability. | `phase/15-template-rendering-observability` |
+
+Phases 12-15 are MVP repair work, not Stage 2+. Stage 2+ remains for scale, official APIs, advanced analytics, and broader provider expansion.
 
 ## Target Artifact Layout
 
@@ -193,6 +206,16 @@ The implementation must use an environment variable, never a hardcoded key:
 GEMINI_API_KEY=
 GEMINI_TTS_VOICE_NAME=Kore
 ```
+
+---
+
+# Phase 12 — Artifact Contracts + Debug Observability
+
+**Phase 12 objective:** Make the pipeline explain itself. After this phase, every job should have a deterministic workspace, every agent/gate should persist inputs/results, the dashboard and CLI should show where a job failed, and final outputs should be separated from intermediate artifacts.
+
+**Phase 12 branch:** `phase/12-artifact-layout-agent-contracts`
+
+**Phase 12 scope:** Tasks 1-18 below.
 
 ---
 
@@ -1442,3 +1465,357 @@ Only after approval if new fixes are needed.
 - Retry/resume commands are documented as follow-up scope and are not implemented until persisted state is reliable.
 - ADR 0012 records the workspace decision.
 - Offline tests pass.
+
+---
+
+# Phase 13 — Retry/Resume + Cache Reuse
+
+**Phase 13 objective:** Make failed/paused jobs restartable without blindly rerunning earlier successful steps or wasting provider credits.
+
+**Expected branch:** `phase/13-retry-resume-cache-reuse`
+
+## Phase 13 Required Capabilities
+
+### 1. Job config snapshot reuse
+
+Persist and reuse the job's config snapshot for all retries/resumes:
+
+```text
+jobs.config_snapshot
+data/assets/cache/job_{id}/manifest.json
+```
+
+Rules:
+
+- Retry/resume must use the original config snapshot by default.
+- User may explicitly request a new config snapshot only with an override flag.
+- Global `.env` or niche changes must not silently alter a running/retried job.
+
+### 2. Retry from a specific agent or gate
+
+Add write-enabled CLI commands:
+
+```bash
+.venv/bin/python3 -m clipper_agency job-retry 125 --from composer
+.venv/bin/python3 -m clipper_agency job-retry 125 --from voice_producer --use-cache
+```
+
+Minimum retry targets:
+
+```text
+safety
+researcher
+scriptwriter
+voice_producer
+visual_director
+composer
+reviewer
+```
+
+Retry behavior:
+
+- Preserve earlier successful artifacts unless invalidated.
+- Mark target and downstream agent states as pending/rerun-required.
+- Never auto-retry without explicit user command.
+- Respect retry limits from PRD/SRS.
+
+### 3. Resume failed/paused jobs
+
+Add:
+
+```bash
+.venv/bin/python3 -m clipper_agency job-resume 125
+```
+
+Resume behavior:
+
+- If failed, resume from failed agent/gate by default.
+- If paused, resume from current paused stage.
+- Re-check stale research/cache freshness gates before resuming.
+- Revalidate required artifacts before skipping paid providers.
+
+### 4. Cache/artifact reuse validation
+
+Before reusing an artifact, validate it:
+
+| Artifact | Validation |
+|---|---|
+| `research_contract.json` | Exists, valid JSON, has `topic`, `video_sources`, `context_sources`, `cache_key`, `cache_freshness`. |
+| `research_brief.md` | Exists, non-empty, linked by contract. |
+| `script.json` | Exists, valid JSON, contains scenes/text/caption. |
+| Voice files | Exist, non-zero, valid audio duration. |
+| Scene files | Exist, non-zero, valid video, 1-5s clip after trimming. |
+| `video.mp4` | Exists, non-zero, 9:16, 1080x1920, audio track present. |
+
+### 5. Dashboard retry controls — basic version
+
+Add minimal write-enabled dashboard controls after CLI retry/resume works:
+
+```text
+Retry from failed step
+Retry from selected agent
+Resume job
+```
+
+Keep the UI basic; full polished retry UX belongs to Phase 15.
+
+## Phase 13 Acceptance Criteria
+
+- `job-retry` can rerun a failed step without rerunning earlier successful paid steps.
+- `job-resume` can continue a failed/paused job from the correct stage.
+- Cached artifacts are reused only after deterministic validation.
+- Retry/resume updates `agent_states`, gate results, manifest, and audit log.
+- Retry remains human-triggered only.
+- Provider calls are not repeated when valid cached artifacts exist.
+
+---
+
+# Phase 14 — Media and Composer Correctness
+
+**Phase 14 objective:** Make generated videos satisfy the MVP media requirements reliably.
+
+**Expected branch:** `phase/14-media-composer-correctness`
+
+## Phase 14 Required Capabilities
+
+### 1. FFmpeg preflight
+
+Add a deterministic preflight check before composition:
+
+```text
+ffmpeg exists
+ffprobe exists
+libx264 available
+aac audio support available
+mp3 decode support available
+```
+
+If missing, fail before expensive render work with a clear message.
+
+### 2. Scene normalization
+
+Every visual scene must be normalized before concat:
+
+```text
+resolution: 1080x1920
+aspect: 9:16
+codec: h264
+pixel format: yuv420p
+duration: 1-5 seconds per clip
+audio: stripped from source clips unless intentionally retained for safe stock media
+metadata: stripped
+```
+
+This directly fixes failures like mixed dimensions between `scene_4.mp4` and `scene_6.mp4`.
+
+### 3. Clip safeguards
+
+Implement and test:
+
+- max clip duration 5s
+- min clip duration 1s
+- reject corrupt/zero-byte files
+- transform clips through re-encode/crop/scale/metadata stripping
+- record provenance for every clip
+
+### 4. Generated card fallback
+
+If there are too few valid clips, generate 1080x1920 PNG cards:
+
+```text
+headline card
+fact card
+context card
+CTA card
+```
+
+Cards should use niche/template colors and be usable as full-screen scenes.
+
+### 5. Audio mixing correctness
+
+Composer must:
+
+- align voice files to scenes
+- produce a final audio track
+- optionally mix safe stock background music if configured
+- default to no background music
+- never embed copyrighted TikTok audio automatically
+
+### 6. Output package correctness
+
+Final output must be:
+
+```text
+data/outputs/job_{id}/video.mp4
+data/outputs/job_{id}/caption.txt
+data/outputs/job_{id}/thumbnail.png
+data/outputs/job_{id}/metadata.json
+```
+
+Validation:
+
+```text
+video.mp4 exists
+video.mp4 size > 1KB
+duration 20-60s
+resolution 1080x1920
+has audio track
+codec h264/aac
+metadata stripped
+```
+
+### 7. Thumbnail generation
+
+Generate template-based `thumbnail.png` at 1080x1920.
+
+## Phase 14 Acceptance Criteria
+
+- Composer no longer fails on mixed source dimensions.
+- Valid source clips are normalized to 1080x1920 before concat.
+- Invalid/too-short clips are rejected or replaced with generated cards.
+- Final `video.mp4` passes G10 deterministic validation.
+- `thumbnail.png`, `caption.txt`, and `metadata.json` are generated consistently.
+- FFmpeg stderr and command logs are persisted for failed renders.
+
+---
+
+# Phase 15 — Template Rendering + Full Observability Dashboard
+
+**Phase 15 objective:** Complete the MVP creative/rendering promise: real template-driven video rendering and production-useful observability.
+
+**Expected branch:** `phase/15-template-rendering-observability`
+
+## Phase 15 Required Capabilities
+
+### 1. Template loader
+
+Load and validate:
+
+```text
+templates/news_card.yaml
+templates/b_roll_narration.yaml
+templates/rapid_update.yaml
+```
+
+Template validation should check:
+
+- layout positions
+- fonts/colors
+- caption style
+- scene durations
+- transition names
+- animation presets
+- thumbnail config
+
+### 2. News Card renderer
+
+Implement a renderer for quick updates:
+
+```text
+headline card
+supporting image/video
+key facts
+caption overlays
+template thumbnail
+```
+
+Best for: short breaking update stories.
+
+### 3. B-Roll Narration renderer
+
+Implement a renderer for context-rich stories:
+
+```text
+voiceover-led pacing
+b-roll clips/cards
+dynamic captions
+lower-thirds/source labels
+template thumbnail
+```
+
+Best for: explanation/context clips.
+
+### 4. Rapid Update renderer
+
+Implement a renderer for fast cuts:
+
+```text
+short clip/card sequence
+punchy captions
+quick transitions
+headline overlays
+template thumbnail
+```
+
+Best for: trending gossip/viral updates.
+
+### 5. Captions, overlays, and animations
+
+Add MVP-safe visual effects:
+
+- burned-in captions
+- headline overlays
+- lower-third source labels
+- simple zoom/pan on cards
+- simple fade/cut transitions
+- no heavy GPU dependencies
+
+### 6. Full observability dashboard
+
+Upgrade the debug-first dashboard into a production-useful dashboard:
+
+```text
+polished pipeline timeline with status icons
+retry-from-step controls
+artifact browser with download buttons
+video preview
+audio preview
+thumbnail preview
+research brief preview
+script preview
+provider attempts timeline
+provider latency/cost summaries
+gate explanations
+filtered job history
+searchable logs
+dashboard notifications
+approval workflow integration hooks
+```
+
+### 7. Full observability CLI parity
+
+Expand CLI diagnostics to match dashboard data:
+
+```bash
+.venv/bin/python3 -m clipper_agency job-timeline 125
+.venv/bin/python3 -m clipper_agency job-open-artifact 125 --path agents/composer/ffmpeg_stderr.log
+.venv/bin/python3 -m clipper_agency job-export-debug-bundle 125
+```
+
+### 8. Debug bundle export
+
+Create a zip/tar artifact for support/debugging:
+
+```text
+job metadata
+manifest
+agent inputs/outputs
+gate results
+logs
+research brief
+script
+provider attempts
+ffmpeg logs
+final package metadata
+```
+
+Exclude secrets and large binaries by default unless explicitly requested.
+
+## Phase 15 Acceptance Criteria
+
+- All three `templates/*.yaml` files are actually loaded and used.
+- Final videos include template-specific captions/overlays/thumbnail treatment.
+- Dashboard can explain every job without reading the filesystem manually.
+- Dashboard supports retry-from-step controls built on Phase 13 retry/resume.
+- Operators can preview outputs and inspect failures from the browser.
+- CLI can export a sanitized debug bundle.
