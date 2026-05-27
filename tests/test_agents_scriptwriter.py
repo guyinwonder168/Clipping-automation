@@ -1,5 +1,6 @@
 """Tests for ScriptwriterAgent."""
 
+import json
 from unittest.mock import MagicMock
 import pytest
 
@@ -158,3 +159,27 @@ class TestScriptwriterExecute:
 
         system_content = mock_chat.call_args.kwargs["messages"][0]["content"]
         assert system_content == "File scriptwriter prompt: - no_defamation"
+
+    def test_execute_persists_scriptwriter_artifacts(self, mocker, tmp_path):
+        mocker.patch(
+            "clipper_agency.llm.client.OpenRouterClient.chat",
+            return_value=self._mock_chat(MOCK_SCRIPT_RESPONSE),
+        )
+        agent = ScriptwriterAgent()
+
+        result = agent.execute(
+            job_id=125,
+            topic="Ariana Grande new album",
+            research_brief="She is releasing a new album next month",
+            safety_rules=["no_defamation"],
+            assets_cache=str(tmp_path),
+        )
+
+        base = tmp_path / "job_125" / "agents" / "scriptwriter"
+        assert json.loads((base / "input.json").read_text(encoding="utf-8"))["topic"] == (
+            "Ariana Grande new album"
+        )
+        assert json.loads((base / "script.json").read_text(encoding="utf-8")) == result["script"]
+        assert (base / "caption.txt").read_text(encoding="utf-8") == result["caption"]
+        assert json.loads((base / "hashtags.json").read_text(encoding="utf-8")) == result["hashtags"]
+        assert json.loads((base / "output.json").read_text(encoding="utf-8"))["status"] == "completed"

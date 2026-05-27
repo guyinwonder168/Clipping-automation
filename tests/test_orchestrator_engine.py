@@ -281,6 +281,35 @@ class TestOrchestratorRunPipeline:
         safety_call = mock_safety.call_args[1]
         assert safety_call["assets_cache"] == str(tmp_path)
 
+    def test_passes_assets_cache_to_scriptwriter(self, db_initialized, tmp_path):
+        """Orchestrator should pass configured asset workspace to Scriptwriter."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": []}
+            mock_scriptwriter.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_voice.return_value = {"status": "completed", "audio_files": []}
+            mock_visual.return_value = {"status": "completed", "assets": []}
+            mock_composer.return_value = {"status": "completed", "video_path": "", "thumbnail_path": ""}
+            mock_reviewer.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            orch.run_pipeline(
+                topic="Test",
+                niche="test_niche",
+                assets_cache=str(tmp_path),
+            )
+
+        scriptwriter_call = mock_scriptwriter.call_args[1]
+        assert scriptwriter_call["assets_cache"] == str(tmp_path)
+
     def test_passes_script_and_research_to_voice_and_visual(self, db_initialized):
         """Orchestrator should pass script to voice producer and visual director."""
         orch = Orchestrator(db_path=db_initialized)

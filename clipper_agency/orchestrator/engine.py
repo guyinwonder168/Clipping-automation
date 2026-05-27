@@ -150,6 +150,7 @@ class Orchestrator:
                 topic=topic,
                 research_brief=research_output.get("research_brief", ""),
                 safety_rules=safety_rules,
+                assets_cache=assets_cache,
             )
 
             # G7: Script Validation (extract text from scene list)
