@@ -8,8 +8,10 @@ def job_output_dir(output_dir: str | Path, job_id: int) -> str:
     """Base output directory for a job.
 
     Used by all agents to construct per-job file paths.
+    Falls back to ``outputs`` when *output_dir* is empty.
     """
-    return f"{output_dir}/job_{job_id}"
+    base = str(output_dir) or "outputs"
+    return f"{base}/job_{job_id}"
 
 
 def research_cache_dir(output_dir: str | Path, job_id: int) -> str:

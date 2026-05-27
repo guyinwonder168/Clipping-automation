@@ -115,6 +115,8 @@ class ScrapeCreatorsService:
             if c.get("cha_name")
         ]
 
+        share_url = aweme.get("share_url", "")
+
         return {
             "desc": desc,
             "author": (aweme.get("author", {}) or {}).get("unique_id", ""),
@@ -122,7 +124,8 @@ class ScrapeCreatorsService:
             "comments": stats.get("comment_count", 0),
             "shares": stats.get("share_count", 0),
             "plays": stats.get("play_count", 0),
-            "share_url": aweme.get("share_url", ""),
+            "url": share_url,           # orchestrator reads this key for source_urls
+            "share_url": share_url,
             "video_urls": video_urls,
             "music": music_info,
             "hashtags": hashtags,
