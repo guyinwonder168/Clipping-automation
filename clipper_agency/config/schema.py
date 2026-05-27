@@ -73,6 +73,7 @@ class AppSettings(BaseSettings):
     pexels_api_key: str = ""
     firecrawl_api_key: str = ""
     scrapecreators_api_key: str = ""
+    gemini_api_key: str = ""
 
     # Paths
     db_path: str = Field(default="data/clipper.db")
@@ -94,6 +95,7 @@ class AppSettings(BaseSettings):
     # TTS provider configuration (Fish Audio or ElevenLabs)
     fish_audio_voice_id: str = ""   # Fish Audio reference_id (voice model)
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    gemini_tts_voice_name: str = "Kore"
 
     # Debug / dev
     debug: bool = False
