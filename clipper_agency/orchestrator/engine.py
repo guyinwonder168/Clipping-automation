@@ -13,6 +13,12 @@ from clipper_agency.agents.visual_director import VisualDirectorAgent
 from clipper_agency.agents.voice_producer import VoiceProducerAgent
 from clipper_agency.config.loader import load_settings
 from clipper_agency.core.artifacts import write_json
+from clipper_agency.core.manifest import (
+    create_manifest,
+    update_manifest_agent,
+    update_manifest_final,
+    update_manifest_gate,
+)
 from clipper_agency.core.paths import gate_result_file
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import (
@@ -55,7 +61,15 @@ class Orchestrator:
         """Persist a gate result to the job workspace."""
         path = gate_result_file(assets_cache, job_id, gate_name)
         write_json(path, asdict(result))
+        update_manifest_gate(assets_cache, job_id, gate_name,
+                            result.passed, result.severity, path)
         return path
+
+    def _complete_agent(self, conn, assets_cache: str, job_id: int,
+                        agent_name: str) -> None:
+        """Mark agent completed in DB and manifest."""
+        mark_agent_completed(conn, job_id, agent_name)
+        update_manifest_agent(assets_cache, job_id, agent_name, "completed")
 
     def _enforce_gate(self, conn, job_id: int, gate_name: str,
                       result: GateResult,
@@ -103,6 +117,8 @@ class Orchestrator:
         # Create job in DB
         job_id = create_job(conn, topic=topic, niche=niche)
         logger.info("Job #%d created", job_id)
+        create_manifest(assets_cache, job_id, topic,
+                        output_dir if output_dir else "outputs")
         agent_names = [
             "safety", "researcher", "scriptwriter",
             "voice_producer", "visual_director", "composer", "reviewer",
@@ -134,7 +150,7 @@ class Orchestrator:
                     "reason": safety_result["reason"],
                     "job_id": job_id,
                 }
-            mark_agent_completed(conn, job_id, "safety")
+            self._complete_agent(conn, assets_cache, job_id, "safety")
 
             safety_rules = [
                 "no_defamation",
@@ -154,7 +170,7 @@ class Orchestrator:
                 output_dir=output_dir,
                 assets_cache=assets_cache,
             )
-            mark_agent_completed(conn, job_id, "researcher")
+            self._complete_agent(conn, assets_cache, job_id, "researcher")
 
             # G4: Post-Research Risk
             g4 = GatePostResearchRisk()
@@ -196,7 +212,7 @@ class Orchestrator:
                 safety_rules=safety_rules,
                 assets_cache=assets_cache,
             )
-            mark_agent_completed(conn, job_id, "scriptwriter")
+            self._complete_agent(conn, assets_cache, job_id, "scriptwriter")
 
             # G7: Script Validation (extract text from scene list)
             g7 = GateScriptValidation()
@@ -219,7 +235,7 @@ class Orchestrator:
                 output_dir=output_dir,
                 assets_cache=assets_cache,
             )
-            mark_agent_completed(conn, job_id, "voice_producer")
+            self._complete_agent(conn, assets_cache, job_id, "voice_producer")
 
             # G8: Audio Validation
             g8 = GateAudioValidation()
@@ -251,7 +267,7 @@ class Orchestrator:
                 output_dir=output_dir,
                 assets_cache=assets_cache,
             )
-            mark_agent_completed(conn, job_id, "visual_director")
+            self._complete_agent(conn, assets_cache, job_id, "visual_director")
 
             # G9: Asset Validation
             g9 = GateAssetValidation()
@@ -286,7 +302,7 @@ class Orchestrator:
                     "reason": compose_output.get("error", "Composer failed"),
                     "job_id": job_id,
                 }
-            mark_agent_completed(conn, job_id, "composer")
+            self._complete_agent(conn, assets_cache, job_id, "composer")
 
             # G10: Video Validation
             g10 = GateVideoValidation()
@@ -306,7 +322,7 @@ class Orchestrator:
                 caption=script_output.get("caption", ""),
                 safety_rules=safety_rules,
             )
-            mark_agent_completed(conn, job_id, "reviewer")
+            self._complete_agent(conn, assets_cache, job_id, "reviewer")
 
             # Package Output
             pkg_output = self._package_output(
@@ -328,6 +344,13 @@ class Orchestrator:
                     "reason": pkg_output.get("error", "Packaging failed"),
                     "job_id": job_id,
                 }
+
+            update_manifest_final(assets_cache, job_id, {
+                "video": pkg_output.get("video_path", ""),
+                "caption": pkg_output.get("caption_path", ""),
+                "thumbnail": pkg_output.get("thumbnail_path", ""),
+                "metadata": pkg_output.get("metadata_path", ""),
+            })
 
             update_job_status(conn, job_id, "COMPLETED")
             logger.info("Pipeline COMPLETED: job #%d", job_id)
