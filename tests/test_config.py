@@ -1,5 +1,7 @@
 """Tests for config schema models and loader."""
 
+from unittest.mock import patch
+
 import pytest
 from pydantic import ValidationError
 
@@ -27,14 +29,15 @@ def test_niche_config_invalid_missing_name():
 
 
 def test_app_settings_defaults():
-    """AppSettings provides sensible defaults for all fields."""
+    """AppSettings provides sensible defaults when no .env file is loaded."""
     from clipper_agency.config.schema import AppSettings
 
-    settings = AppSettings()
-    assert settings.db_path == "data/clipper.db"
-    assert str(settings.assets_cache) == "assets/cache"
-    assert str(settings.output_dir) == "outputs"
-    assert settings.debug is False
+    with patch.dict("os.environ", {}, clear=True):
+        settings = AppSettings(_env_file=None)
+        assert settings.db_path == "data/clipper.db"
+        assert str(settings.assets_cache) == "assets/cache"
+        assert str(settings.output_dir) == "outputs"
+        assert settings.debug is False
 
 
 def test_agent_llm_config():

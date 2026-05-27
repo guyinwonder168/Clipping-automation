@@ -86,7 +86,7 @@ def api_create_job():
     from clipper_agency.orchestrator.engine import Orchestrator
 
     settings = load_settings()
-    orch = Orchestrator()
+    orch = Orchestrator(db_path=str(settings.db_path))
     result = orch.run_pipeline(
         topic=data["topic"],
         niche=data.get("niche", "indonesian_artists"),

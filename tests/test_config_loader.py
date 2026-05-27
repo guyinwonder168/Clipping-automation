@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from clipper_agency.config.loader import load_niche, load_template, load_config, load_settings
-from clipper_agency.config.schema import NicheConfig, TemplateConfig
+from clipper_agency.config.schema import AppSettings, NicheConfig, TemplateConfig
 
 
 class TestLoadSettings:
@@ -26,9 +26,9 @@ class TestLoadSettings:
             assert str(settings.output_dir) == "/tmp/out"
 
     def test_load_settings_defaults_when_env_unset(self):
-        """Verify defaults when env vars are not set."""
+        """Verify defaults when env vars are not set (no .env file)."""
         with patch.dict(os.environ, {}, clear=True):
-            settings = load_settings()
+            settings = AppSettings(_env_file=None)
             assert settings.db_path == "data/clipper.db"
             assert str(settings.output_dir) == "outputs"
             assert str(settings.assets_cache) == "assets/cache"

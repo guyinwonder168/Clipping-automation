@@ -68,7 +68,10 @@ class TestRunCommand:
             "output": {"video_path": "/tmp/v.mp4"},
         }
         runner = CliRunner()
-        result = runner.invoke(cli, ["run", "--topic", "Test topic", "--niche", "test", "--db", ":memory:"])
+        result = runner.invoke(
+            cli,
+            ["run", "--topic", "Test topic", "--niche", "test", "--db", ":memory:", "--output-dir", "outputs"],
+        )
         assert result.exit_code == 0
         mock_run.assert_called_once_with(
             topic="Test topic", niche="test", output_dir="outputs",
