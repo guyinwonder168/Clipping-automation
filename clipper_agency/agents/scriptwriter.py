@@ -54,7 +54,6 @@ class ScriptwriterAgent(BaseAgent):
     ) -> dict[str, Any]:
         rules = safety_rules or []
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
-        brief_preview = research_brief[:80] if research_brief else "(empty)"
         logger.info("Scriptwriter: brief length=%d", len(research_brief))
 
         settings = load_settings()
