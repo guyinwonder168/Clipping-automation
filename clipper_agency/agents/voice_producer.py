@@ -43,5 +43,5 @@ class VoiceProducerAgent(BaseAgent):
             logger.info("Voice: completed %d audio files", len(audio_files))
             return {"status": "completed", "audio_files": audio_files}
         except Exception as e:
-            logger.error("Voice: TTS generation failed — %s", e)
+            logger.exception("Voice: TTS generation failed")
             return {"status": "failed", "error": str(e), "audio_files": audio_files}

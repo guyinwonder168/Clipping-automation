@@ -30,8 +30,8 @@ class VisualDirectorAgent(BaseAgent):
         urls = source_urls or []
 
         logger.info(
-            "Visual: topic='%s' scenes=%d source_urls=%d",
-            topic, len(scenes), len(urls),
+            "Visual: scenes=%d source_urls=%d",
+            len(scenes), len(urls),
         )
 
         try:
@@ -41,7 +41,7 @@ class VisualDirectorAgent(BaseAgent):
             logger.info("Visual: completed %d assets", len(assets))
             return {"status": "completed", "assets": assets}
         except Exception as e:
-            logger.error("Visual: asset sourcing failed — %s", e)
+            logger.exception("Visual: asset sourcing failed")
             return {"status": "failed", "error": str(e), "assets": []}
 
     def _search_pexels(self, topic: str) -> list[dict]:

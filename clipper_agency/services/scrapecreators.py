@@ -39,7 +39,7 @@ class ScrapeCreatorsService:
         if not self.api_key:
             raise ValueError("SCRAPECREATORS_API_KEY not set")
 
-        logger.info("ScrapeCreators: searching TikTok for '%s'", query)
+        logger.info("ScrapeCreators: searching TikTok (query=%d chars)", len(query))
 
         with httpx.Client(base_url=self.BASE_URL, timeout=30) as client:
             resp = client.get(
@@ -89,11 +89,9 @@ class ScrapeCreatorsService:
         for br in bit_rates:
             url_list = br.get("play_addr", {}).get("url_list", [])
             if url_list:
-                label = (
-                    br.get("gear_name", "")
-                    or f"{br.get('quality_type', '')}p"
-                    or "default"
-                )
+                gear = br.get("gear_name") or ""
+                quality = br.get("quality_type") or ""
+                label = gear or (f"{quality}p" if quality else "default")
                 video_urls[label] = url_list[0]
 
         # Music / audio metadata

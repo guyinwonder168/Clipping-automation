@@ -40,7 +40,7 @@ class SafetyAgent(BaseAgent):
         **kwargs: Any,
     ) -> dict[str, Any]:
         rules = safety_rules or []
-        logger.info("Safety: checking topic='%s' rules=%d", topic, len(rules))
+        logger.info("Safety: checking rules=%d", len(rules))
 
         settings = load_settings()
         llm = OpenRouterClient()

@@ -29,7 +29,7 @@ class PexelsService:
         if not self.api_key:
             raise ValueError("PEXELS_API_KEY not set")
 
-        logger.info("Pexels: searching videos for '%s' (per_page=%d)", query, per_page)
+        logger.info("Pexels: searching videos (per_page=%d)", per_page)
         with httpx.Client(base_url=self.BASE_URL) as client:
             resp = client.get(
                 "/videos/search",

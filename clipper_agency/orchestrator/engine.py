@@ -56,7 +56,7 @@ class Orchestrator:
                        Composer→G10→Reviewer→Package
         """
         conn = get_connection(self.db_path)
-        logger.info("Pipeline START: topic='%s' niche='%s'", topic, niche)
+        logger.info("Pipeline START: niche='%s'", niche)
 
         # G1: Input Preflight
         g1 = GateInputPreflight()

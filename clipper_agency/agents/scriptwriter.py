@@ -55,7 +55,7 @@ class ScriptwriterAgent(BaseAgent):
         rules = safety_rules or []
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
         brief_preview = research_brief[:80] if research_brief else "(empty)"
-        logger.info("Scriptwriter: topic='%s' brief='%s...'", topic, brief_preview)
+        logger.info("Scriptwriter: brief='%s...'", brief_preview)
 
         settings = load_settings()
         llm = OpenRouterClient()

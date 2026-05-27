@@ -51,7 +51,7 @@ class ReviewerAgent(BaseAgent):
         rules = safety_rules or []
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
         scenes = script or []
-        logger.info("Reviewer: topic='%s' scenes=%d", topic, len(scenes))
+        logger.info("Reviewer: scenes=%d", len(scenes))
         script_text = "\n".join(
             f"Scene {s.get('scene', i)}: {s.get('text', '')}"
             for i, s in enumerate(scenes)

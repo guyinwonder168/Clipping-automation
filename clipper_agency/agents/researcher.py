@@ -63,7 +63,7 @@ class ResearcherAgent(BaseAgent):
         **kwargs: Any,
     ) -> dict[str, Any]:
         rules = safety_rules or []
-        cache_dir = ensure_research_cache_dir(output_dir, job_id)
+        ensure_research_cache_dir(output_dir, job_id)
 
         # ── 1. Gather sources (cached or live) ──────────────────────────
         scrapecreators_data = self._get_scrapecreators(topic, output_dir, job_id)
@@ -202,9 +202,8 @@ class ResearcherAgent(BaseAgent):
         rules_text = "\n".join(f"- {r}" for r in safety_rules) if safety_rules else "None"
 
         logger.info(
-            "Researcher: synthesizing research for '%s' "
+            "Researcher: synthesizing research "
             "(%d sources, %d chars of text)",
-            topic,
             len(trimmed),
             len(sources_text),
         )
