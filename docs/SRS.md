@@ -1,8 +1,8 @@
 # Clipper Agency — Software Requirements Specification
 
-**Version:** 2.2
+**Version:** 2.3
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-10)
+**Status:** Final — MVP Implementation Complete (Phase 0-11)
 **Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -43,24 +43,28 @@
 | FR-13 | Lightweight cost + credit estimate displayed before generation. Blocks job if insufficient credits. | P0 | MVP |
 | FR-14 | All agent states visible in dashboard (idle/running/completed/failed) | P0 | MVP |
 | FR-15 | Asset caching: downloaded clips and Pexels images cached locally to avoid redundant downloads | P0 | MVP |
+| FR-16 | Research data size guard: ScrapeCreators responses trimmed via `trim=true` + field extraction; researcher LLM input capped at 40K chars to prevent token overflow | P0 | MVP |
 
 ### 2.2 User Interfaces
 
 | ID | Requirement | Priority | Stage |
 |----|-------------|----------|-------|
-| FR-15 | Web dashboard for job management, agent configuration, niche profiles | P0 | MVP |
-| FR-16 | CLI: `python3 cli.py run --topic "..." --niche indonesian_artists` | P0 | MVP |
-| FR-17 | Configurable agent autonomy levels | P1 | MVP |
-| FR-18 | Selectable video templates (manual or agent-auto) | P1 | MVP |
+| FR-17 | Web dashboard for job management, agent configuration, niche profiles | P0 | MVP |
+| FR-18 | CLI: `python3 cli.py run --topic "..." --niche indonesian_artists` | P0 | MVP |
+| FR-19 | CLI `test-agent` subcommand: run individual agents independently for debugging/testing, bypassing orchestrator DB tracking | P1 | MVP |
+| FR-20 | Configurable agent autonomy levels | P1 | MVP |
+| FR-21 | Selectable video templates (manual or agent-auto) | P1 | MVP |
 
 ### 2.3 Configuration
 
 | ID | Requirement | Priority | Stage |
 |----|-------------|----------|-------|
-| FR-19 | Configuration hierarchy: Agent defaults → Niche → Account → Job-level overrides | P0 | MVP |
-| FR-20 | All agent settings configurable per level (LLM model, prompt version, temperature, max tokens, voice ID) | P0 | MVP |
-| FR-21 | Config versioning with diff and rollback | P0 | MVP |
-| FR-22 | Niche profiles swappable without code changes | P0 | MVP |
+| FR-22 | Configuration hierarchy: Agent defaults → Niche → Account → Job-level overrides | P0 | MVP |
+| FR-23 | All agent settings configurable per level (LLM model, prompt version, temperature, max tokens, voice ID) | P0 | MVP |
+| FR-24 | Per-agent LLM model configuration via environment variables (`SAFETY_MODEL`, `RESEARCHER_MODEL`, `SCRIPTWRITER_MODEL`, `REVIEWER_MODEL`) with sensible defaults | P0 | MVP |
+| FR-25 | Structured logging for all external API calls, agent executions, and pipeline state transitions with configurable log level (`LOG_LEVEL`) | P0 | MVP |
+| FR-26 | Config versioning with diff and rollback | P0 | MVP |
+| FR-27 | Niche profiles swappable without code changes | P0 | MVP |
 
 ---
 
@@ -77,6 +81,7 @@
 | NFR-07 | All agent state transitions logged with timestamps | Required |
 | NFR-08 | Jobs restartable at any stage (state persisted in DB) | Required |
 | NFR-09 | Agent contracts identical at all scales (MVP → 1000+ accounts) | Required |
+| NFR-10 | All external API calls log request parameters, response status, token usage, cost estimate, and latency | Required |
 
 ---
 
@@ -90,7 +95,7 @@
 | ElevenLabs | Voice generation | API key | Free tier sufficient for MVP; 1 default voice ID |
 | Pexels API | Stock video/images fallback | API key (free) | 200 requests/hr |
 | yt-dlp | Video/audio download from 1000+ sites | None | Site-specific limits |
-| ScrapeCreators | TikTok video URLs, creator data, song metadata | API key (`x-api-key`) | 75 free credits |
+| ScrapeCreators | TikTok video URLs, creator data, song metadata | API key (`x-api-key`) | 75 free credits; `trim=true` + field extraction reduces 1-2MB raw responses to ~500 chars/result |
 | Firecrawl | Web search + structured page scraping | API key | Daily free runs |
 
 ### 4.2 Provider Routing
@@ -102,7 +107,7 @@ Cache → ScrapeCreators (TikTok video/music) + Firecrawl (context/news)
 Stage 2: + Serper. Stage 2+: + DuckDuckGo site-filtered.
 ```
 
-ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagement data, and song metadata. Results cached with TTL to minimize credit burn.
+ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagement data, and song metadata. Results cached with TTL to minimize credit burn. Researcher caches ScrapeCreators JSON, Firecrawl results, and research briefs per job output directory.
 
 ### 4.3 External Services (Future)
 
@@ -211,7 +216,7 @@ ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagem
 | Scaling | Single worker, sequential jobs | Parallel workers, DB-backed queue |
 | Concurrency | SQLite Write-Ahead Logging (WAL) + advisory lock prevents concurrent CLI runs | DB-backed queue handles concurrency |
 | Container | Dockerfile + docker-compose.yml | Same |
-| CLI | `python3 cli.py run --topic "..."` | Same |
+| CLI | `python3 cli.py run --topic "..."`; `python3 -m clipper_agency test-agent <AGENT> [OPTS]`; `--log-level` option | Same + `test-agent` for debugging |
 | Dashboard | Flask/FastAPI + basic auth + 2 groups | Same + full role auth |
 
 ### Scaling Path

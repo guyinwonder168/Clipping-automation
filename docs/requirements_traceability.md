@@ -1,8 +1,8 @@
 # Clipper Agency — Requirements Traceability Matrix
 
-**Version:** 2.2
+**Version:** 2.3
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-10)
+**Status:** Final — MVP Implementation Complete (Phase 0-11)
 
 ---
 
@@ -98,6 +98,18 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 66 | User-upload: local file path or single import | PRD §9 |
 | 67 | Template mode: manual, agent_select, hybrid | Design §10 |
 
+### From Phase 11 (Logging, Model Config, ScrapeCreators Cache)
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 68 | Per-agent model config via env vars (`SAFETY_MODEL`, `RESEARCHER_MODEL`, `SCRIPTWRITER_MODEL`, `REVIEWER_MODEL`) in `AppSettings` | SRS §2 FR-24, Design §9 |
+| 69 | Structured logging: all agents log start/result/error; all services log API requests/responses; LLM client logs model, tokens, cost, latency | SRS §2 FR-25, SRS §3 NFR-10, Design §2 |
+| 70 | ScrapeCreators: `trim=true` + `_extract_fields()` reduces 1-2MB raw responses to ~500 chars/result; max 20 results | SRS §2 FR-16, SRS §4, Design §4 |
+| 71 | Researcher token guard: `MAX_SOURCE_CHARS=40000`, `MAX_CHARS_PER_SOURCE=500` prevents 551K token LLM overflow | SRS §2 FR-16, Design §4 |
+| 72 | Researcher file cache: `scrapecreators.json`, `firecrawl.json`, `research_brief.json` per job output dir | Design §4, Design §9 |
+| 73 | `clipper_agency/core/paths.py`: shared cache path helpers; `clipper_agency/core/logging.py`: `setup_logging()` + `get_logger()` | Design §9 |
+| 74 | `test-agent` CLI subcommand: runs individual agents independently, bypasses orchestrator DB tracking | SRS §2 FR-19, Design §13 |
+
 ---
 
 ## Requirements Traceability Matrix
@@ -108,21 +120,24 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 |--------|--------|---------------|------|------------|------------|
 | PR-01 | FR-01 | §3 Gated Pipeline | All gates | Empty topic, no niche config | G1 preflight |
 | PR-02 | FR-01..FR-14 | §3, §4 | G1-G10 | See edge case catalog below | Gate definitions |
-| PR-03 | FR-15 | §13 Dashboard | N/A | Dashboard unavailable | N/A |
-| PR-04 | FR-16 | §13 CLI | N/A | Invalid CLI args | N/A |
+| PR-03 | FR-17 | §13 Dashboard | N/A | Dashboard unavailable | N/A |
+| PR-04 | FR-18 | §13 CLI | N/A | Invalid CLI args | N/A |
 | PR-05 | FR-10 | §3, §13 Output | G10 | Missing file, wrong format | Deterministic check |
-| PR-06 | FR-22 | §9 Config | N/A | Invalid config | Config validation |
+| PR-06 | FR-27 | §9 Config | N/A | Invalid config | Config validation |
 | PR-10 | FR-02 | §4 Safety, §3 G4 | G4 pre + post | See safety edge cases | G1 preflight + G4 |
 | PR-11 | FR-13 | §3 G2 | G2 | Zero credits | G2 estimate |
 | PR-15 | NFR-04 | §12 Cost | N/A | Model pricing change | Cost recalculation |
+| PR-22 | FR-24 | §9 Config, §9 Env Layer | N/A | Missing model env var | Default to `mimo-v2-flash` |
+| PR-23 | FR-25, NFR-10 | §2 Logging | N/A | Log level misconfigured | Default to INFO |
 
 ### MVP P1 Requirements
 
 | PRD ID | SRS ID | Design Section | Gate | Edge Cases | Validation |
 |--------|--------|---------------|------|------------|------------|
-| PR-07 | FR-18 | §10 Templates | N/A | Invalid template config | Config validation |
-| PR-08 | FR-17 | §9 Autonomy Levels | N/A | Invalid autonomy setting | Config validation |
+| PR-07 | FR-21 | §10 Templates | N/A | Invalid template config | Config validation |
+| PR-08 | FR-20 | §9 Autonomy Levels | N/A | Invalid autonomy setting | Config validation |
 | PR-12 | SRS §5 | §9 Auth | N/A | Unauthorized access | Auth check |
+| PR-24 | FR-19 | §13 CLI | N/A | Invalid agent name | CLI validation |
 | PR-09 | — | Stage 2 | — | — | — |
 | PR-13 | — | Stage 2 | — | — | — |
 | PR-14 | — | Stage 2 | — | — | — |
