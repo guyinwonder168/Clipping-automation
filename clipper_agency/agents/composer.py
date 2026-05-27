@@ -1,9 +1,12 @@
 """Composer Agent — FFmpeg-based video assembly and thumbnail generation."""
 
+import logging
 import subprocess
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 
 class ComposerAgent(BaseAgent):
@@ -24,7 +27,13 @@ class ComposerAgent(BaseAgent):
         video_assets = assets or []
         voice_files = audio_files or []
 
+        logger.info(
+            "Composer: %d video assets, %d audio files",
+            len(video_assets), len(voice_files),
+        )
+
         if not video_assets and not voice_files:
+            logger.warning("Composer: no assets or audio — skipping")
             return {
                 "status": "completed",
                 "video_path": "",
@@ -37,12 +46,26 @@ class ComposerAgent(BaseAgent):
         try:
             self._assemble_video(video_assets, voice_files, video_path)
             self._generate_thumbnail(video_path, thumbnail_path)
+            logger.info(
+                "Composer: completed — video=%s thumbnail=%s",
+                video_path, thumbnail_path,
+            )
             return {
                 "status": "completed",
                 "video_path": video_path,
                 "thumbnail_path": thumbnail_path,
             }
+        except subprocess.CalledProcessError as e:
+            stderr_text = (e.stderr or "").strip()
+            logger.error("Composer: FFmpeg failed — %s", stderr_text[:500])
+            return {
+                "status": "failed",
+                "error": stderr_text or str(e),
+                "video_path": video_path,
+                "thumbnail_path": "",
+            }
         except Exception as e:
+            logger.exception("Composer: unexpected error")
             return {
                 "status": "failed",
                 "error": str(e),

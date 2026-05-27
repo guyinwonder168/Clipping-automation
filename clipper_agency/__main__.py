@@ -1,14 +1,19 @@
 """Clipper Agency — automated short-form video content production."""
 
+import os
+
 import click
 from dotenv import load_dotenv
 
 from clipper_agency import __version__
 from clipper_agency.config.loader import load_settings
+from clipper_agency.core.logging import setup_logging, get_logger
 from clipper_agency.orchestrator.engine import Orchestrator
 
 # Load .env into os.environ before any service reads env vars.
 load_dotenv()
+
+logger = get_logger(__name__)
 
 
 def _print_version(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
@@ -30,10 +35,40 @@ def _output_dir() -> str:
     return str(settings.output_dir)
 
 
+def _log_startup_info() -> None:
+    """Log key configuration on startup for debugging."""
+    settings = load_settings()
+    logger.info("Clipper Agency v%s starting", __version__)
+    logger.info("DB path: %s", settings.db_path)
+    logger.info("Output dir: %s", settings.output_dir)
+    logger.info(
+        "Agent models: safety=%s researcher=%s scriptwriter=%s reviewer=%s",
+        settings.safety_model,
+        settings.researcher_model,
+        settings.scriptwriter_model,
+        settings.reviewer_model,
+    )
+    # API key status (presence only — no values leaked)
+    for key in [
+        "OPENROUTER_API_KEY", "ELEVENLABS_API_KEY", "PEXELS_API_KEY",
+        "SCRAPECREATORS_API_KEY", "FIRECRAWL_API_KEY",
+    ]:
+        status = "CONFIGURED" if os.getenv(key) else "MISSING"
+        logger.info("API key %s: %s", key, status)
+
+
 @click.group()
 @click.option("--version", is_flag=True, callback=_print_version, expose_value=False, is_eager=True, help="Show version and exit")
-def cli() -> None:
+@click.option("--log-level", default=None, help="Logging level (DEBUG, INFO, WARNING, ERROR)")
+def cli(log_level: str | None) -> None:
     """Clipper Agency — automated video content production."""
+    if log_level is None:
+        settings = load_settings()
+        log_level = settings.log_level
+    setup_logging(log_level)
+    # Only log startup info if this is a non-trivial command (not just --version)
+    if not any(a == "--version" for a in (click.get_current_context().args or [])):
+        _log_startup_info()
 
 
 @cli.command()
@@ -96,6 +131,118 @@ def jobs() -> None:
         else:
             status_icon = "\N{hourglass}"
         click.echo(f"{status_icon} #{job['id']}: {job['topic']} — {job['status']} ({job['created_at']})")
+
+
+# ── test-agent subcommand ──────────────────────────────────────────────────
+
+AGENT_NAMES = ["safety", "researcher", "scriptwriter", "voice", "visual", "composer", "reviewer"]
+
+
+@cli.command("test-agent")
+@click.argument("agent", type=click.Choice(AGENT_NAMES))
+@click.option("--topic", "-t", default="Test topic", help="Topic for the agent")
+@click.option("--safety-rules", default="no_defamation,mark_rumors_as_unconfirmed", help="Comma-separated safety rules")
+@click.option("--max-results", default=3, help="Max search results (researcher only)")
+@click.option("--research-brief", default=None, help="Research brief text (scriptwriter only)")
+@click.option("--auto-research", is_flag=True, help="Run researcher first to feed scriptwriter/visual")
+@click.option("--script", default=None, help="Script JSON string (voice/visual/reviewer/composer)")
+@click.option("--caption", default="Test caption", help="Caption text (reviewer only)")
+@click.option("--output-dir", "-o", default=None, help="Output directory (default: test_outputs)")
+def test_agent(
+    agent: str,
+    topic: str,
+    safety_rules: str,
+    max_results: int,
+    research_brief: str | None,
+    auto_research: bool,
+    script: str | None,
+    caption: str,
+    output_dir: str | None,
+) -> None:
+    """Run a single agent independently for testing/debugging.
+
+    AGENT is one of: safety, researcher, scriptwriter, voice,
+    visual, composer, reviewer.
+
+    \b
+    Examples:
+      python -m clipper_agency test-agent safety -t "Agnez Mo"
+      python -m clipper_agency test-agent researcher -t "Agnez Mo" --max-results 2
+      python -m clipper_agency test-agent scriptwriter -t "Agnez Mo" --auto-research
+    """
+    import json
+    import time
+    from clipper_agency.agents.safety import SafetyAgent
+    from clipper_agency.agents.researcher import ResearcherAgent
+    from clipper_agency.agents.scriptwriter import ScriptwriterAgent
+    from clipper_agency.agents.voice_producer import VoiceProducerAgent
+    from clipper_agency.agents.visual_director import VisualDirectorAgent
+    from clipper_agency.agents.composer import ComposerAgent
+    from clipper_agency.agents.reviewer import ReviewerAgent
+
+    resolved_output = output_dir or _output_dir()
+    rules = [r.strip() for r in safety_rules.split(",") if r.strip()]
+
+    agent_map = {
+        "safety": SafetyAgent,
+        "researcher": ResearcherAgent,
+        "scriptwriter": ScriptwriterAgent,
+        "voice": VoiceProducerAgent,
+        "visual": VisualDirectorAgent,
+        "composer": ComposerAgent,
+        "reviewer": ReviewerAgent,
+    }
+
+    instance = agent_map[agent]()
+    click.echo(f"\n--- Testing {agent.upper()} agent ---")
+    click.echo(f"Topic: {topic}")
+    click.echo(f"Output dir: {resolved_output}")
+
+    start = time.monotonic()
+
+    # ── Auto-research: run researcher first to feed downstream ──────────
+    auto_research_output: dict = {}
+    if auto_research and agent in ("scriptwriter", "visual"):
+        click.echo("\n[auto-research] Running researcher first...")
+        researcher = ResearcherAgent()
+        auto_research_output = researcher.execute(
+            job_id=0, topic=topic, safety_rules=rules,
+            max_results=max_results, output_dir=resolved_output,
+        )
+        click.echo(f"[auto-research] Research brief: {len(auto_research_output.get('research_brief', ''))} chars")
+
+    # ── Dispatch to agent ──────────────────────────────────────────────
+    if agent == "safety":
+        result = instance.execute(job_id=0, topic=topic, safety_rules=rules)
+    elif agent == "researcher":
+        result = instance.execute(
+            job_id=0, topic=topic, safety_rules=rules,
+            max_results=max_results, output_dir=resolved_output,
+        )
+    elif agent == "scriptwriter":
+        brief = research_brief or auto_research_output.get("research_brief", "No research brief provided.")
+        result = instance.execute(job_id=0, topic=topic, research_brief=brief, safety_rules=rules)
+    elif agent == "voice":
+        parsed_script = json.loads(script) if script else [{"scene": 1, "text": "Test voice output for pipeline verification.", "duration": 5}]
+        result = instance.execute(job_id=0, script=parsed_script, output_dir=resolved_output)
+    elif agent == "visual":
+        parsed_script = json.loads(script) if script else [{"scene": 1, "duration": 5}]
+        source_urls = auto_research_output.get("sources", {}).get("sources", [])
+        urls = [s.get("share_url", "") for s in source_urls if isinstance(s, dict)]
+        result = instance.execute(job_id=0, script=parsed_script, topic=topic, source_urls=urls, output_dir=resolved_output)
+    elif agent == "composer":
+        parsed_script = json.loads(script) if script else [{"scene": 1, "duration": 5}]
+        result = instance.execute(job_id=0, assets=parsed_script, audio_files=[], output_dir=resolved_output)
+    elif agent == "reviewer":
+        parsed_script = json.loads(script) if script else [{"scene": 1, "text": "Test review content.", "duration": 5}]
+        result = instance.execute(job_id=0, topic=topic, script=parsed_script, caption=caption, safety_rules=rules)
+    else:
+        click.echo(f"Unknown agent: {agent}")
+        return
+
+    elapsed = time.monotonic() - start
+    click.echo(f"\n--- Result (in {elapsed:.1f}s) ---")
+    click.echo(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":

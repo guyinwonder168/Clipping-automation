@@ -1,11 +1,15 @@
 """Scriptwriter Agent — TikTok script and caption generator via LLM."""
 
 import json
+import logging
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
+from clipper_agency.config.loader import load_settings
 from clipper_agency.llm.client import OpenRouterClient
+
+logger = logging.getLogger(__name__)
 
 SCRIPTWRITER_PROMPT = """You are a TikTok scriptwriter creating engaging scripts for an Indonesian artist infotainment channel.
 
@@ -50,11 +54,14 @@ class ScriptwriterAgent(BaseAgent):
     ) -> dict[str, Any]:
         rules = safety_rules or []
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
+        brief_preview = research_brief[:80] if research_brief else "(empty)"
+        logger.info("Scriptwriter: topic='%s' brief='%s...'", topic, brief_preview)
 
+        settings = load_settings()
         llm = OpenRouterClient()
         prompt = load_prompt("scriptwriter", SCRIPTWRITER_PROMPT, PROMPTS_DIR)
         response = llm.chat(
-            model="glm-4-9b",
+            model=settings.scriptwriter_model,
             messages=[
                 {
                     "role": "system",
@@ -73,6 +80,11 @@ class ScriptwriterAgent(BaseAgent):
             max_tokens=2048,
         )
         parsed = self._parse_script_response(response["content"])
+        logger.info(
+            "Scriptwriter: %d scenes, duration=%ds",
+            len(parsed["script"]),
+            parsed.get("estimated_duration", 0),
+        )
         return {
             "status": "completed",
             "script": parsed["script"],

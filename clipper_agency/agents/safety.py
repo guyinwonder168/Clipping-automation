@@ -1,11 +1,15 @@
 """Safety Agent — content safety checking via LLM."""
 
 import json
+import logging
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
+from clipper_agency.config.loader import load_settings
 from clipper_agency.llm.client import OpenRouterClient
+
+logger = logging.getLogger(__name__)
 
 SAFETY_PROMPT = """You are a content safety checker. Analyze the following topic and return a JSON verdict:
 - "pass": Topic is safe for content generation
@@ -36,10 +40,13 @@ class SafetyAgent(BaseAgent):
         **kwargs: Any,
     ) -> dict[str, Any]:
         rules = safety_rules or []
+        logger.info("Safety: checking topic='%s' rules=%d", topic, len(rules))
+
+        settings = load_settings()
         llm = OpenRouterClient()
         prompt = load_prompt("safety", SAFETY_PROMPT, PROMPTS_DIR)
         response = llm.chat(
-            model="glm-4-9b",
+            model=settings.safety_model,
             messages=[
                 {"role": "system", "content": prompt},
                 {
@@ -50,7 +57,9 @@ class SafetyAgent(BaseAgent):
             temperature=0.1,
             max_tokens=256,
         )
-        return self._parse_response(response["content"])
+        result = self._parse_response(response["content"])
+        logger.info("Safety: verdict=%s", result.get("status"))
+        return result
 
     def _parse_response(self, content: str) -> dict[str, Any]:
         """Parse the JSON verdict from the LLM response."""

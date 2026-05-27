@@ -1,10 +1,13 @@
 """Visual Director Agent — video asset sourcing and scene planning."""
 
+import logging
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.services.pexels import PexelsService
 from clipper_agency.services.ytdlp import YtDlpService
+
+logger = logging.getLogger(__name__)
 
 
 class VisualDirectorAgent(BaseAgent):
@@ -26,12 +29,19 @@ class VisualDirectorAgent(BaseAgent):
         scenes = script or []
         urls = source_urls or []
 
+        logger.info(
+            "Visual: topic='%s' scenes=%d source_urls=%d",
+            topic, len(scenes), len(urls),
+        )
+
         try:
             pexels_videos = self._search_pexels(topic)
             plan = self._plan_scenes(scenes, urls, pexels_videos)
             assets = self._download_assets(plan, job_id, output_dir)
+            logger.info("Visual: completed %d assets", len(assets))
             return {"status": "completed", "assets": assets}
         except Exception as e:
+            logger.error("Visual: asset sourcing failed — %s", e)
             return {"status": "failed", "error": str(e), "assets": []}
 
     def _search_pexels(self, topic: str) -> list[dict]:

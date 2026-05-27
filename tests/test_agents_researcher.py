@@ -115,7 +115,7 @@ class TestResearcherSynthesize:
             "sources": [],
         }
         agent._synthesize_research(aggregated, "Topic", [])
-        assert mock_chat.call_args.kwargs["model"] == "glm-4-9b"
+        assert mock_chat.call_args.kwargs["model"] == "mimo-v2-flash"
         assert mock_chat.call_args.kwargs["temperature"] == 0.3
 
 
@@ -152,7 +152,7 @@ class TestResearcherExecute:
             },
         ]
 
-    def test_execute_returns_research_package(self, mocker):
+    def test_execute_returns_research_package(self, mocker, tmp_path):
         mocker.patch(
             "clipper_agency.services.firecrawl_service.FirecrawlService.search",
             return_value=self._mock_firecrawl_results(),
@@ -169,6 +169,7 @@ class TestResearcherExecute:
         result = agent.execute(
             job_id=2,
             topic="K-pop trends",
+            output_dir=str(tmp_path),
         )
         assert result["status"] == "completed"
         assert result["research_brief"] == "Research brief: Comprehensive analysis"
@@ -176,7 +177,7 @@ class TestResearcherExecute:
         assert result["sources"]["firecrawl_count"] == 2
         assert result["sources"]["scrapecreators_count"] == 1
 
-    def test_execute_handles_firecrawl_failure(self, mocker):
+    def test_execute_handles_firecrawl_failure(self, mocker, tmp_path):
         mocker.patch(
             "clipper_agency.services.firecrawl_service.FirecrawlService.search",
             side_effect=Exception("Firecrawl error"),
@@ -190,12 +191,12 @@ class TestResearcherExecute:
             return_value=self._mock_chat("Partial research brief"),
         )
         agent = ResearcherAgent()
-        result = agent.execute(job_id=2, topic="Test")
+        result = agent.execute(job_id=2, topic="Test", output_dir=str(tmp_path))
         assert result["status"] == "completed"
         assert result["sources"]["firecrawl_count"] == 0
         assert result["sources"]["scrapecreators_count"] == 1
 
-    def test_execute_handles_scrapecreators_failure(self, mocker):
+    def test_execute_handles_scrapecreators_failure(self, mocker, tmp_path):
         mocker.patch(
             "clipper_agency.services.firecrawl_service.FirecrawlService.search",
             return_value=self._mock_firecrawl_results(),
@@ -209,12 +210,12 @@ class TestResearcherExecute:
             return_value=self._mock_chat("Partial research brief"),
         )
         agent = ResearcherAgent()
-        result = agent.execute(job_id=2, topic="Test")
+        result = agent.execute(job_id=2, topic="Test", output_dir=str(tmp_path))
         assert result["status"] == "completed"
         assert result["sources"]["firecrawl_count"] == 2
         assert result["sources"]["scrapecreators_count"] == 0
 
-    def test_execute_handles_total_failure(self, mocker):
+    def test_execute_handles_total_failure(self, mocker, tmp_path):
         mocker.patch(
             "clipper_agency.services.firecrawl_service.FirecrawlService.search",
             side_effect=Exception("Firecrawl error"),
@@ -228,11 +229,11 @@ class TestResearcherExecute:
             return_value=self._mock_chat("Minimal brief from LLM knowledge"),
         )
         agent = ResearcherAgent()
-        result = agent.execute(job_id=2, topic="Test")
+        result = agent.execute(job_id=2, topic="Test", output_dir=str(tmp_path))
         assert result["status"] == "completed"
         assert result["sources"]["total_sources"] == 0
 
-    def test_execute_uses_max_results_param(self, mocker):
+    def test_execute_uses_max_results_param(self, mocker, tmp_path):
         mock_search = mocker.patch(
             "clipper_agency.services.firecrawl_service.FirecrawlService.search",
             return_value=[{
@@ -248,5 +249,5 @@ class TestResearcherExecute:
             return_value=self._mock_chat("Brief"),
         )
         agent = ResearcherAgent()
-        agent.execute(job_id=2, topic="Test", max_results=3)
+        agent.execute(job_id=2, topic="Test", max_results=3, output_dir=str(tmp_path))
         mock_search.assert_called_once_with("Test", 3)

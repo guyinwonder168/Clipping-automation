@@ -1,9 +1,13 @@
 """OpenRouter API client for chat completions."""
 
+import logging
 import os
+import time
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterClient:
@@ -30,6 +34,15 @@ class OpenRouterClient:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not set")
 
+        total_input_chars = sum(
+            len(m.get("content", "")) for m in messages
+        )
+        logger.debug(
+            "LLM request: model=%s messages=%d input_chars=%d",
+            model, len(messages), total_input_chars,
+        )
+
+        start = time.monotonic()
         with httpx.Client(base_url=self.BASE_URL, timeout=60) as client:
             resp = client.post(
                 "/chat/completions",
@@ -45,10 +58,35 @@ class OpenRouterClient:
                     **kwargs,
                 },
             )
-            resp.raise_for_status()
+            elapsed = time.monotonic() - start
+
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError:
+                detail = resp.text[:1000]
+                logger.error(
+                    "LLM error: HTTP %d model=%s in %.1fs — %s",
+                    resp.status_code, model, elapsed, detail,
+                )
+                raise httpx.HTTPStatusError(
+                    f"{resp.status_code} - {detail[:500]}",
+                    request=resp.request,
+                    response=resp,
+                )
+
             data = resp.json()
+            usage = data.get("usage", {})
+            logger.info(
+                "LLM response: model=%s status=%d tokens_in=%s tokens_out=%s cost=$%.5f latency=%.1fs",
+                model,
+                resp.status_code,
+                usage.get("prompt_tokens", "?"),
+                usage.get("completion_tokens", "?"),
+                usage.get("total_tokens", 0) * 0.000001,  # approximate cost
+                elapsed,
+            )
             return {
                 "content": data["choices"][0]["message"]["content"],
                 "model": model,
-                "usage": data.get("usage", {}),
+                "usage": usage,
             }

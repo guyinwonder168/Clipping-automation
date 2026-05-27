@@ -106,7 +106,7 @@ class TestScriptwriterExecute:
         )
         agent = ScriptwriterAgent()
         agent.execute(job_id=3, topic="Topic", research_brief="Brief")
-        assert mock_chat.call_args.kwargs["model"] == "glm-4-9b"
+        assert mock_chat.call_args.kwargs["model"] == "mimo-v2-flash"
         assert mock_chat.call_args.kwargs["temperature"] == 0.7
 
     def test_execute_handles_llm_failure(self, mocker):

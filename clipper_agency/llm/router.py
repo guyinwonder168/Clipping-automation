@@ -14,7 +14,7 @@ class ModelPreset(str, Enum):
 
 PRESET_MODELS: dict[str, dict[str, str]] = {
     "budget_east": {
-        "ultra_cheap": "glm-4-9b",
+        "ultra_cheap": "mimo-v2-flash",
         "default": "mimo-v2-flash",
         "indonesian": "qwen3-32b",
     },
