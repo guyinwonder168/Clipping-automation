@@ -7,6 +7,44 @@ from click.testing import CliRunner
 from clipper_agency.__main__ import cli
 
 
+class TestSettingsHelpers:
+    """Test _db_path and _output_dir helper functions."""
+
+    @patch("clipper_agency.__main__.load_settings")
+    def test_db_path_from_settings(self, mock_load):
+        from clipper_agency.__main__ import _db_path
+        from clipper_agency.config.schema import AppSettings
+
+        mock_load.return_value = AppSettings(_env_file=None, db_path="/custom/db.db")
+        assert _db_path() == "/custom/db.db"
+
+    @patch("clipper_agency.__main__.load_settings")
+    def test_db_path_default(self, mock_load):
+        from clipper_agency.__main__ import _db_path
+        from clipper_agency.config.schema import AppSettings
+
+        with patch.dict("os.environ", {}, clear=True):
+            mock_load.return_value = AppSettings(_env_file=None)
+            assert _db_path() == "data/clipper.db"
+
+    @patch("clipper_agency.__main__.load_settings")
+    def test_output_dir_from_settings(self, mock_load):
+        from clipper_agency.__main__ import _output_dir
+        from clipper_agency.config.schema import AppSettings
+
+        mock_load.return_value = AppSettings(_env_file=None, output_dir="/custom/out")
+        assert _output_dir() == "/custom/out"
+
+    @patch("clipper_agency.__main__.load_settings")
+    def test_output_dir_default(self, mock_load):
+        from clipper_agency.__main__ import _output_dir
+        from clipper_agency.config.schema import AppSettings
+
+        with patch.dict("os.environ", {}, clear=True):
+            mock_load.return_value = AppSettings(_env_file=None)
+            assert _output_dir() == "outputs"
+
+
 class TestCliHelp:
     def test_cli_help(self):
         """--help should show usage with Clipper Agency title."""
@@ -68,7 +106,10 @@ class TestRunCommand:
             "output": {"video_path": "/tmp/v.mp4"},
         }
         runner = CliRunner()
-        result = runner.invoke(cli, ["run", "--topic", "Test topic", "--niche", "test", "--db", ":memory:"])
+        result = runner.invoke(
+            cli,
+            ["run", "--topic", "Test topic", "--niche", "test", "--db", ":memory:", "--output-dir", "outputs"],
+        )
         assert result.exit_code == 0
         mock_run.assert_called_once_with(
             topic="Test topic", niche="test", output_dir="outputs",

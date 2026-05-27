@@ -1,10 +1,12 @@
 """Tests for config schema models and loader."""
 
+from unittest.mock import patch
+
 import pytest
 from pydantic import ValidationError
 
 from clipper_agency.config.hierarchy import AgentDefaults, ConfigHierarchy
-from clipper_agency.config.schema import AgentLLMConfig, AppConfig, NicheConfig
+from clipper_agency.config.schema import AgentLLMConfig, NicheConfig
 
 
 def test_niche_config_valid():
@@ -26,10 +28,16 @@ def test_niche_config_invalid_missing_name():
         NicheConfig(**data)
 
 
-def test_app_config_defaults():
-    cfg = AppConfig()
-    assert cfg.database_path == "data/clipper.db"
-    assert cfg.assets_cache_dir == "assets/cache"
+def test_app_settings_defaults():
+    """AppSettings provides sensible defaults when no .env file is loaded."""
+    from clipper_agency.config.schema import AppSettings
+
+    with patch.dict("os.environ", {}, clear=True):
+        settings = AppSettings(_env_file=None)
+        assert settings.db_path == "data/clipper.db"
+        assert str(settings.assets_cache) == "assets/cache"
+        assert str(settings.output_dir) == "outputs"
+        assert settings.debug is False
 
 
 def test_agent_llm_config():

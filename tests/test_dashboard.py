@@ -231,3 +231,27 @@ def test_dashboard_index_uses_async_await():
     ).read_text(encoding="utf-8")
     assert ".then(" not in source
     assert "await fetch" in source
+
+
+@patch("clipper_agency.dashboard.app.load_settings")
+@patch("clipper_agency.orchestrator.engine.Orchestrator.run_pipeline")
+def test_api_create_job_passes_settings_to_orchestrator(mock_run, mock_settings, client):
+    """Dashboard passes db_path and output_dir from settings to Orchestrator."""
+    from clipper_agency.config.schema import AppSettings
+
+    mock_settings.return_value = AppSettings(
+        _env_file=None, db_path="test/db.db", output_dir="test/out",
+    )
+    mock_run.return_value = {"status": "completed", "job_id": 1, "output": {}}
+
+    resp = client.post(
+        "/api/jobs",
+        json={"topic": "test topic"},
+        headers=_auth_header() | _csrf_header(client),
+    )
+    assert resp.status_code == 200
+    mock_run.assert_called_once_with(
+        topic="test topic",
+        niche="indonesian_artists",
+        output_dir="test/out",
+    )

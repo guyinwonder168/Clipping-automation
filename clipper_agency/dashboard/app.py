@@ -6,6 +6,7 @@ from flask import Flask, abort, jsonify, render_template, request
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from clipper_agency import __version__
+from clipper_agency.config.loader import load_settings
 from clipper_agency.dashboard.auth import requires_auth
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import get_job, list_jobs
@@ -33,7 +34,8 @@ def handle_csrf_error(error: CSRFError):
 
 def _get_db():
     """Get a database connection with schema initialization."""
-    conn = get_connection("data/clipper.db")
+    settings = load_settings()
+    conn = get_connection(str(settings.db_path))
     initialize_schema(conn)
     return conn
 
@@ -83,10 +85,12 @@ def api_create_job():
 
     from clipper_agency.orchestrator.engine import Orchestrator
 
-    orch = Orchestrator()
+    settings = load_settings()
+    orch = Orchestrator(db_path=str(settings.db_path))
     result = orch.run_pipeline(
         topic=data["topic"],
         niche=data.get("niche", "indonesian_artists"),
+        output_dir=str(settings.output_dir),
     )
     return jsonify(result)
 

@@ -8,14 +8,16 @@ from clipper_agency.services.scrapecreators import ScrapeCreatorsService
 
 
 def test_service_init():
-    svc = ScrapeCreatorsService()
-    assert svc.api_key is None
+    with patch.dict("os.environ", {}, clear=True):
+        svc = ScrapeCreatorsService()
+        assert svc.api_key is None
 
 
 def test_search_no_key():
-    svc = ScrapeCreatorsService()
-    with pytest.raises(ValueError, match="SCRAPECREATORS_API_KEY"):
-        svc.search_tiktok_videos("artist news")
+    with patch.dict("os.environ", {}, clear=True):
+        svc = ScrapeCreatorsService()
+        with pytest.raises(ValueError, match="SCRAPECREATORS_API_KEY"):
+            svc.search_tiktok_videos("artist news")
 
 
 @patch("httpx.Client")

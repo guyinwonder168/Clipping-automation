@@ -58,7 +58,11 @@ class TemplateConfig(BaseModel):
 
 
 class AppSettings(BaseSettings):
-    """Application-level settings loaded from .env / environment."""
+    """Application-level settings loaded from .env / environment.
+
+    Field names map 1:1 to environment variable names (uppercased).
+    For example, ``db_path`` reads ``DB_PATH`` from the env.
+    """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -70,12 +74,9 @@ class AppSettings(BaseSettings):
     scrapecreators_api_key: str = ""
 
     # Paths
-    data_dir: Path = Field(default=Path("data"))
+    db_path: str = Field(default="data/clipper.db")
     assets_cache: Path = Field(default=Path("assets/cache"))
     output_dir: Path = Field(default=Path("outputs"))
-
-    # Database
-    database_url: str = Field(default="sqlite+aiosqlite:///data/clipper.db")
 
     # Default LLM
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -83,13 +84,3 @@ class AppSettings(BaseSettings):
     # Debug / dev
     debug: bool = False
     dry_run: bool = False
-
-
-class AppConfig(BaseModel):
-    """Application config — paths and credentials (non-settings variant)."""
-
-    database_path: str = Field(default="data/clipper.db")
-    assets_cache_dir: str = Field(default="assets/cache")
-    outputs_dir: str = Field(default="outputs")
-    dashboard_username: str = Field(default="admin")
-    dashboard_password: str = Field(default="changeme")

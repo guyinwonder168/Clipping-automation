@@ -8,8 +8,9 @@ from clipper_agency.services.elevenlabs import ElevenLabsService
 
 
 def test_service_init():
-    svc = ElevenLabsService()
-    assert svc.api_key is None
+    with patch.dict("os.environ", {}, clear=True):
+        svc = ElevenLabsService()
+        assert svc.api_key is None
 
 
 @patch("httpx.Client")
@@ -32,6 +33,7 @@ def test_generate_voice(mock_httpx, tmp_path):
 
 
 def test_generate_voice_no_key(tmp_path):
-    svc = ElevenLabsService()
-    with pytest.raises(ValueError, match="ELEVENLABS_API_KEY"):
-        svc.generate_voice("test", "voice", str(tmp_path / "v.mp3"))
+    with patch.dict("os.environ", {}, clear=True):
+        svc = ElevenLabsService()
+        with pytest.raises(ValueError, match="ELEVENLABS_API_KEY"):
+            svc.generate_voice("test", "voice", str(tmp_path / "v.mp3"))
