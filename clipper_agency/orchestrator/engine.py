@@ -196,6 +196,7 @@ class Orchestrator:
                 topic=topic,
                 source_urls=source_urls,
                 output_dir=output_dir,
+                assets_cache=assets_cache,
             )
 
             # G9: Asset Validation

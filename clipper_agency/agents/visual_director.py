@@ -1,9 +1,17 @@
 """Visual Director Agent — video asset sourcing and scene planning."""
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
+from clipper_agency.core.artifacts import write_json
+from clipper_agency.core.paths import (
+    agent_input_file,
+    agent_output_file,
+    ensure_agent_dir,
+    visual_scene_file,
+)
 from clipper_agency.services.pexels import PexelsService
 from clipper_agency.services.ytdlp import YtDlpService
 
@@ -29,6 +37,17 @@ class VisualDirectorAgent(BaseAgent):
         scenes = script or []
         urls = source_urls or []
 
+        assets_cache = kwargs.get("assets_cache", "")
+        agent_dir = ""
+        if assets_cache:
+            agent_dir = ensure_agent_dir(assets_cache, job_id, "visual_director")
+            write_json(agent_input_file(assets_cache, job_id, "visual_director"), {
+                "job_id": job_id,
+                "scene_count": len(scenes),
+                "topic": topic,
+                "source_url_count": len(urls),
+            })
+
         logger.info(
             "Visual: scenes=%d source_urls=%d",
             len(scenes), len(urls),
@@ -37,9 +56,33 @@ class VisualDirectorAgent(BaseAgent):
         try:
             pexels_videos = self._search_pexels(topic)
             plan = self._plan_scenes(scenes, urls, pexels_videos)
-            assets = self._download_assets(plan, job_id, output_dir)
+
+            if agent_dir:
+                write_json(f"{agent_dir}/scene_plan.json", plan)
+
+            # Determine output base (and ensure scenes dir exists)
+            if assets_cache:
+                scenes_dir = f"{agent_dir}/scenes"
+                Path(scenes_dir).mkdir(parents=True, exist_ok=True)
+            else:
+                scenes_dir = f"{output_dir or 'outputs'}/job_{job_id}"
+
+            assets = self._download_assets(plan, job_id, scenes_dir)
+
+            output = {"status": "completed", "assets": assets}
+
+            if agent_dir:
+                write_json(agent_output_file(assets_cache, job_id, "visual_director"),
+                            output)
+                write_json(f"{agent_dir}/provenance.json", {
+                    "topic": topic,
+                    "pexels_results": len(pexels_videos),
+                    "source_url_count": len(urls),
+                    "scene_count": len(plan),
+                })
+
             logger.info("Visual: completed %d assets", len(assets))
-            return {"status": "completed", "assets": assets}
+            return output
         except Exception as e:
             logger.exception("Visual: asset sourcing failed")
             return {"status": "failed", "error": str(e), "assets": []}
@@ -88,19 +131,19 @@ class VisualDirectorAgent(BaseAgent):
         return plan
 
     def _download_assets(
-        self, plan: list[dict], job_id: int, output_dir: str
+        self, plan: list[dict], job_id: int, scenes_dir: str
     ) -> list[dict]:
         assets: list[dict] = []
         pexels = PexelsService()
         ytdlp = YtDlpService()
 
-        for i, item in enumerate(plan):
+        for item in plan:
             scene_id = item["scene"]
             source = item["source"]
             url = item["url"]
 
             if source == "tiktok":
-                output_path = f"{output_dir}/job_{job_id}/scene_{scene_id}.mp4"
+                output_path = f"{scenes_dir}/scene_{scene_id}.mp4"
                 result = ytdlp.download(url, output_path)
                 file_path = result.path if result else ""
                 assets.append({
@@ -109,7 +152,7 @@ class VisualDirectorAgent(BaseAgent):
                     "path": file_path,
                 })
             elif source == "pexels":
-                output_path = f"{output_dir}/job_{job_id}/scene_{scene_id}.mp4"
+                output_path = f"{scenes_dir}/scene_{scene_id}.mp4"
                 path = pexels.download_video(url, output_path)
                 assets.append({
                     "scene": scene_id,
