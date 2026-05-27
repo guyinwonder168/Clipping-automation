@@ -74,16 +74,46 @@ def update_agent_state(conn: sqlite3.Connection, job_id: int,
                        output_data: str | None = None,
                        error_message: str | None = None) -> None:
     """Update an agent state's status and optional output."""
-    if state in ("completed", "failed"):
+    if state == "running":
+        started_sql = "COALESCE(started_at, datetime('now'))"
+        completed_sql = "NULL"
+    elif state in ("completed", "failed"):
+        started_sql = "started_at"
         completed_sql = "datetime('now')"
     else:
+        started_sql = "started_at"
         completed_sql = "NULL"
     conn.execute(
         f"""UPDATE agent_states
             SET state = ?, output_data = COALESCE(?, output_data),
                 error_message = COALESCE(?, error_message),
+                started_at = {started_sql},
                 completed_at = {completed_sql}
             WHERE job_id = ? AND agent_name = ?""",
         (state, output_data, error_message, job_id, agent_name),
     )
     conn.commit()
+
+
+def mark_agent_running(conn: sqlite3.Connection, job_id: int,
+                       agent_name: str, input_data: str | None = None) -> None:
+    """Mark an agent as running and optionally store input_data."""
+    update_agent_state(conn, job_id, agent_name, "running",
+                       output_data=input_data)
+
+
+def mark_agent_completed(conn: sqlite3.Connection, job_id: int,
+                         agent_name: str,
+                         output_data: str | None = None) -> None:
+    """Mark an agent as completed and optionally store output_data."""
+    update_agent_state(conn, job_id, agent_name, "completed",
+                       output_data=output_data)
+
+
+def mark_agent_failed(conn: sqlite3.Connection, job_id: int,
+                      agent_name: str, error_message: str,
+                      output_data: str | None = None) -> None:
+    """Mark an agent as failed with error message."""
+    update_agent_state(conn, job_id, agent_name, "failed",
+                       output_data=output_data,
+                       error_message=error_message)

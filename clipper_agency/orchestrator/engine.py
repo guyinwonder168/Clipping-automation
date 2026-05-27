@@ -18,6 +18,9 @@ from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import (
     create_agent_state,
     create_job,
+    mark_agent_completed,
+    mark_agent_failed,
+    mark_agent_running,
     update_job_status,
 )
 from clipper_agency.db.schema import initialize_schema
@@ -115,6 +118,7 @@ class Orchestrator:
 
             # Safety Agent (via delegating method for testability)
             logger.info("G2: running Safety agent")
+            mark_agent_running(conn, job_id, "safety")
             safety_result = self._run_safety(
                 job_id=job_id,
                 topic=topic,
@@ -122,6 +126,7 @@ class Orchestrator:
             )
             if safety_result.get("status") == "hard_fail":
                 logger.error("Safety FAILED: %s", safety_result.get("reason"))
+                mark_agent_failed(conn, job_id, "safety", safety_result["reason"])
                 update_job_status(conn, job_id, "FAILED", safety_result["reason"])
                 return {
                     "status": "failed",
@@ -129,6 +134,7 @@ class Orchestrator:
                     "reason": safety_result["reason"],
                     "job_id": job_id,
                 }
+            mark_agent_completed(conn, job_id, "safety")
 
             safety_rules = [
                 "no_defamation",
@@ -142,11 +148,13 @@ class Orchestrator:
 
             # Researcher Agent
             logger.info("G3: running Researcher agent")
+            mark_agent_running(conn, job_id, "researcher")
             research_output = self._run_researcher(
                 job_id=job_id, topic=topic, safety_rules=safety_rules,
                 output_dir=output_dir,
                 assets_cache=assets_cache,
             )
+            mark_agent_completed(conn, job_id, "researcher")
 
             # G4: Post-Research Risk
             g4 = GatePostResearchRisk()
@@ -180,6 +188,7 @@ class Orchestrator:
 
             # Scriptwriter Agent
             logger.info("G6: running Scriptwriter agent")
+            mark_agent_running(conn, job_id, "scriptwriter")
             script_output = self._run_scriptwriter(
                 job_id=job_id,
                 topic=topic,
@@ -187,6 +196,7 @@ class Orchestrator:
                 safety_rules=safety_rules,
                 assets_cache=assets_cache,
             )
+            mark_agent_completed(conn, job_id, "scriptwriter")
 
             # G7: Script Validation (extract text from scene list)
             g7 = GateScriptValidation()
@@ -202,12 +212,14 @@ class Orchestrator:
 
             # Voice Producer Agent
             logger.info("G7: running Voice Producer agent")
+            mark_agent_running(conn, job_id, "voice_producer")
             voice_output = self._run_voice_producer(
                 job_id=job_id,
                 script=script_output.get("script", []),
                 output_dir=output_dir,
                 assets_cache=assets_cache,
             )
+            mark_agent_completed(conn, job_id, "voice_producer")
 
             # G8: Audio Validation
             g8 = GateAudioValidation()
@@ -221,6 +233,7 @@ class Orchestrator:
 
             # Visual Director Agent
             logger.info("G8: running Visual Director agent")
+            mark_agent_running(conn, job_id, "visual_director")
             sources_data = research_output.get("sources", {})
             if isinstance(sources_data, dict):
                 research_sources = sources_data.get("sources", [])
@@ -238,6 +251,7 @@ class Orchestrator:
                 output_dir=output_dir,
                 assets_cache=assets_cache,
             )
+            mark_agent_completed(conn, job_id, "visual_director")
 
             # G9: Asset Validation
             g9 = GateAssetValidation()
@@ -250,6 +264,7 @@ class Orchestrator:
 
             # Composer Agent
             logger.info("G9: running Composer agent")
+            mark_agent_running(conn, job_id, "composer")
             compose_output = self._run_composer(
                 job_id=job_id,
                 assets=visual_output.get("assets", []),
@@ -261,6 +276,8 @@ class Orchestrator:
             # Check composer failure
             if compose_output.get("status") == "failed":
                 logger.error("Composer FAILED: %s", compose_output.get("error"))
+                mark_agent_failed(conn, job_id, "composer",
+                                  compose_output.get("error", "Composer failed"))
                 update_job_status(conn, job_id, "FAILED",
                                   compose_output.get("error", "Composer failed"))
                 return {
@@ -269,6 +286,7 @@ class Orchestrator:
                     "reason": compose_output.get("error", "Composer failed"),
                     "job_id": job_id,
                 }
+            mark_agent_completed(conn, job_id, "composer")
 
             # G10: Video Validation
             g10 = GateVideoValidation()
@@ -280,6 +298,7 @@ class Orchestrator:
 
             # Reviewer Agent
             logger.info("G10: running Reviewer agent")
+            mark_agent_running(conn, job_id, "reviewer")
             review_output = self._run_reviewer(
                 job_id=job_id,
                 topic=topic,
@@ -287,6 +306,7 @@ class Orchestrator:
                 caption=script_output.get("caption", ""),
                 safety_rules=safety_rules,
             )
+            mark_agent_completed(conn, job_id, "reviewer")
 
             # Package Output
             pkg_output = self._package_output(

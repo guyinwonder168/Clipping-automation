@@ -858,3 +858,97 @@ class TestOrchestratorRunPipeline:
             assert "passed" in data
             assert "severity" in data
             assert "message" in data
+
+    # ── Task 11: Agent state DB transitions ──────────────────────
+
+    def test_agent_states_transition_to_completed(self, db_initialized, tmp_path):
+        """All agent states should transition pending→running→completed."""
+        orch = Orchestrator(db_path=db_initialized)
+        audio = tmp_path / "a.mp3"; audio.write_bytes(b"x")
+        asset = tmp_path / "v.mp4"; asset.write_bytes(b"x")
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {
+                "status": "completed", "research_brief": "ok",
+                "sources": ["https://a.com", "https://b.com"],
+            }
+            mock_scriptwriter.return_value = {
+                "status": "completed", "script": [],
+                "caption": "", "hashtags": [], "estimated_duration": 0,
+            }
+            mock_voice.return_value = {
+                "status": "completed", "audio_files": [str(audio)],
+            }
+            mock_visual.return_value = {
+                "status": "completed",
+                "assets": [{"scene": 1, "source": "pexels", "path": str(asset)}],
+            }
+            mock_composer.return_value = {
+                "status": "completed",
+                "video_path": str(video), "thumbnail_path": "/tmp/thumb.png",
+            }
+            mock_reviewer.return_value = {
+                "status": "pass", "score": 80, "feedback": "ok", "issues": [],
+            }
+            mock_pkg.return_value = {
+                "status": "completed", "output_dir": "/tmp",
+                "video_path": "", "caption_path": "", "thumbnail_path": "",
+                "metadata_path": "",
+            }
+
+            result = orch.run_pipeline(topic="Test", niche="test_niche")
+
+        assert result["status"] == "completed"
+        conn = get_connection(db_initialized)
+        expected_agents = ["safety", "researcher", "scriptwriter",
+                          "voice_producer", "visual_director", "composer",
+                          "reviewer"]
+        for agent_name in expected_agents:
+            state = conn.execute(
+                "SELECT state, started_at, completed_at FROM agent_states "
+                "WHERE job_id=? AND agent_name=?",
+                (result["job_id"], agent_name),
+            ).fetchone()
+            assert state is not None, f"Missing state for {agent_name}"
+            assert state["state"] == "completed", \
+                f"{agent_name} state is '{state['state']}', expected 'completed'"
+            assert state["started_at"] is not None, \
+                f"{agent_name} started_at is null"
+            assert state["completed_at"] is not None, \
+                f"{agent_name} completed_at is null"
+
+    def test_failed_agent_state_persists(self, db_initialized):
+        """Failed agent should have state=failed with error_message."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {
+                "status": "completed", "research_brief": "ok",
+                "sources": [],
+                "risk_flags": ["defamation"],
+            }
+
+            result = orch.run_pipeline(topic="Test", niche="test_niche")
+
+        conn = get_connection(db_initialized)
+        # Researcher should be completed (it ran before G4 check)
+        researcher_state = conn.execute(
+            "SELECT state FROM agent_states WHERE job_id=? AND agent_name=?",
+            (result["job_id"], "researcher"),
+        ).fetchone()
+        assert researcher_state["state"] == "completed"
+        # Scriptwriter was never reached
+        scriptwriter_state = conn.execute(
+            "SELECT state FROM agent_states WHERE job_id=? AND agent_name=?",
+            (result["job_id"], "scriptwriter"),
+        ).fetchone()
+        assert scriptwriter_state["state"] == "pending"
