@@ -3,13 +3,20 @@
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.config.loader import load_settings
+from clipper_agency.core.artifacts import write_json, write_text
 from clipper_agency.core.paths import (
+    agent_dir,
+    agent_input_file,
+    agent_output_file,
     ensure_research_cache_dir,
     firecrawl_cache_file,
+    researcher_brief_file,
+    researcher_contract_file,
     research_brief_cache_file,
     scrapecreators_cache_file,
 )
@@ -60,9 +67,20 @@ class ResearcherAgent(BaseAgent):
         safety_rules: list[str] | None = None,
         max_results: int = 5,
         output_dir: str = "",
+        assets_cache: str = "",
         **kwargs: Any,
     ) -> dict[str, Any]:
         rules = safety_rules or []
+        if assets_cache:
+            write_json(
+                agent_input_file(assets_cache, job_id, self.agent_name),
+                {
+                    "job_id": job_id,
+                    "topic": topic,
+                    "safety_rules": rules,
+                    "max_results": max_results,
+                },
+            )
         ensure_research_cache_dir(output_dir, job_id)
 
         # ── 1. Gather sources (cached or live) ──────────────────────────
@@ -73,11 +91,25 @@ class ResearcherAgent(BaseAgent):
         # ── 2. Synthesize research brief (cached or live LLM) ───────────
         brief = self._get_research_brief(aggregated, topic, rules, output_dir, job_id)
 
-        return {
+        result = {
             "status": "completed",
             "research_brief": brief,
             "sources": aggregated,
+            "risk_flags": [],
         }
+        if assets_cache:
+            result.update(
+                self._persist_contract_artifacts(
+                    assets_cache=assets_cache,
+                    job_id=job_id,
+                    topic=topic,
+                    brief=brief,
+                    firecrawl_data=firecrawl_data,
+                    scrapecreators_data=scrapecreators_data,
+                    output=result,
+                )
+            )
+        return result
 
     # ── source gathering (with cache) ───────────────────────────────────────
 
@@ -117,19 +149,10 @@ class ResearcherAgent(BaseAgent):
         try:
             service = FirecrawlService()
             data = service.search(topic, max_results)
-            # Strip large content fields for caching; keep url/title/desc
-            lean = [
-                {
-                    "url": r.get("url", ""),
-                    "title": r.get("title", ""),
-                    "description": r.get("description", ""),
-                }
-                for r in data
-            ]
             with open(cache_path, "w") as fh:
-                json.dump(lean, fh, indent=2)
-            logger.debug("Researcher: saved %d Firecrawl results to %s", len(lean), cache_path)
-            return lean
+                json.dump(data, fh, indent=2)
+            logger.debug("Researcher: saved %d Firecrawl results to %s", len(data), cache_path)
+            return data
         except Exception:
             logger.exception("Researcher: Firecrawl API failed")
             return []
@@ -172,6 +195,58 @@ class ResearcherAgent(BaseAgent):
             "total_sources": len(sources),
             "sources": sources,
         }
+
+    def _persist_contract_artifacts(
+        self,
+        assets_cache: str,
+        job_id: int,
+        topic: str,
+        brief: str,
+        firecrawl_data: list[dict],
+        scrapecreators_data: list[dict],
+        output: dict[str, Any],
+    ) -> dict[str, str]:
+        base = Path(agent_dir(assets_cache, job_id, self.agent_name))
+        raw_scrapecreators_path = base / "raw" / "scrapecreators_response.json"
+        raw_firecrawl_path = base / "raw" / "firecrawl_response.json"
+        video_sources_path = base / "normalized" / "video_sources.json"
+        context_sources_path = base / "normalized" / "context_sources.json"
+        music_candidates_path = base / "normalized" / "music_candidates.json"
+        entities_path = base / "normalized" / "entities.json"
+        risk_flags_path = base / "normalized" / "risk_flags.json"
+
+        brief_path = researcher_brief_file(assets_cache, job_id)
+        contract_path = researcher_contract_file(assets_cache, job_id)
+        write_json(raw_scrapecreators_path, scrapecreators_data)
+        write_json(raw_firecrawl_path, firecrawl_data)
+        write_text(brief_path, brief)
+        write_json(video_sources_path, scrapecreators_data)
+        write_json(context_sources_path, firecrawl_data)
+        write_json(music_candidates_path, [])
+        write_json(entities_path, {})
+        write_json(risk_flags_path, [])
+
+        contract = {
+            "topic": topic,
+            "topic_brief_path": brief_path,
+            "raw_scrapecreators_path": str(raw_scrapecreators_path),
+            "raw_firecrawl_path": str(raw_firecrawl_path),
+            "video_sources": scrapecreators_data,
+            "context_sources": firecrawl_data,
+            "music_candidates": [],
+            "entities": {},
+            "risk_flags": [],
+            "cache_key": f"job_{job_id}:{topic}",
+            "cache_freshness": "fresh",
+        }
+        write_json(contract_path, contract)
+
+        paths = {
+            "research_contract_path": contract_path,
+            "research_brief_path": brief_path,
+        }
+        write_json(agent_output_file(assets_cache, job_id, self.agent_name), {**output, **paths})
+        return paths
 
     def _synthesize_research(
         self,

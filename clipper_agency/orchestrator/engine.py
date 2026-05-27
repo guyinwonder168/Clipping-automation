@@ -116,6 +116,7 @@ class Orchestrator:
             research_output = self._run_researcher(
                 job_id=job_id, topic=topic, safety_rules=safety_rules,
                 output_dir=output_dir,
+                assets_cache=assets_cache,
             )
 
             # G4: Post-Research Risk
