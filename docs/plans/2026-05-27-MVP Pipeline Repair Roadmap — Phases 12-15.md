@@ -219,7 +219,7 @@ GEMINI_TTS_VOICE_NAME=Kore
 
 ---
 
-## Task 1: Add Canonical Job Workspace Path Helpers
+## Task 1: ✅ Add Canonical Job Workspace Path Helpers
 
 **Files:**
 - Modify: `clipper_agency/core/paths.py`
@@ -321,7 +321,7 @@ git commit -m "feat: add canonical job workspace paths"
 
 ---
 
-## Task 2: Add JSON/Markdown Artifact Writer Utilities
+## Task 2: ✅ Add JSON/Markdown Artifact Writer Utilities
 
 **Files:**
 - Create: `clipper_agency/core/artifacts.py`
@@ -402,7 +402,7 @@ git commit -m "feat: add artifact writer helpers"
 
 ---
 
-## Task 3: Persist Safety Agent Input and Output
+## Task 3: ✅ Persist Safety Agent Input and Output
 
 **Files:**
 - Modify: `clipper_agency/agents/safety.py`
@@ -467,7 +467,7 @@ git commit -m "feat: persist safety agent artifacts"
 
 ---
 
-## Task 4: Repair Researcher Artifact Contract
+## Task 4: ✅ Repair Researcher Artifact Contract
 
 **Files:**
 - Modify: `clipper_agency/agents/researcher.py`
@@ -544,7 +544,7 @@ git commit -m "feat: persist researcher contract artifacts"
 
 ---
 
-## Task 5: Persist Scriptwriter Artifacts
+## Task 5: ✅ Persist Scriptwriter Artifacts
 
 **Files:**
 - Modify: `clipper_agency/agents/scriptwriter.py`
@@ -595,7 +595,7 @@ git commit -m "feat: persist scriptwriter artifacts"
 
 ---
 
-## Task 6: Add Google AI Studio Gemini TTS Service
+## Task 6: ✅ Add Google AI Studio Gemini TTS Service
 
 **Files:**
 - Create: `clipper_agency/services/gemini_tts.py`
@@ -687,7 +687,7 @@ git commit -m "feat: add gemini tts service"
 
 ---
 
-## Task 7: Repair Voice Producer Provider Fallback and Artifact Paths
+## Task 7: ✅ Repair Voice Producer Provider Fallback and Artifact Paths
 
 **Files:**
 - Modify: `clipper_agency/agents/voice_producer.py`
@@ -752,7 +752,7 @@ git commit -m "feat: add tts fallback and voice artifacts"
 
 ---
 
-## Task 8: Repair Visual Director Artifact Paths and Provenance
+## Task 8: ✅ Repair Visual Director Artifact Paths and Provenance
 
 **Files:**
 - Modify: `clipper_agency/agents/visual_director.py`
@@ -803,7 +803,7 @@ git commit -m "feat: persist visual director artifacts"
 
 ---
 
-## Task 9: Repair Composer Output Package and Diagnostics
+## Task 9: ✅ Repair Composer Output Package and Diagnostics
 
 **Files:**
 - Modify: `clipper_agency/agents/composer.py`
