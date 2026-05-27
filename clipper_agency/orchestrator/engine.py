@@ -170,6 +170,7 @@ class Orchestrator:
                 job_id=job_id,
                 script=script_output.get("script", []),
                 output_dir=output_dir,
+                assets_cache=assets_cache,
             )
 
             # G8: Audio Validation
