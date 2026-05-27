@@ -1,6 +1,7 @@
 """Orchestrator Engine — coordinates the full gated agent pipeline."""
 
 import logging
+from dataclasses import asdict
 from typing import Any
 
 from clipper_agency.agents.composer import ComposerAgent
@@ -11,6 +12,8 @@ from clipper_agency.agents.scriptwriter import ScriptwriterAgent
 from clipper_agency.agents.visual_director import VisualDirectorAgent
 from clipper_agency.agents.voice_producer import VoiceProducerAgent
 from clipper_agency.config.loader import load_settings
+from clipper_agency.core.artifacts import write_json
+from clipper_agency.core.paths import gate_result_file
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import (
     create_agent_state,
@@ -19,6 +22,7 @@ from clipper_agency.db.queries import (
 )
 from clipper_agency.db.schema import initialize_schema
 from clipper_agency.orchestrator.gates import (
+    GateResult,
     GateCostEstimate,
     GateInputPreflight,
     GatePostResearchRisk,
@@ -43,6 +47,28 @@ class Orchestrator:
         conn = get_connection(db_path)
         initialize_schema(conn)
 
+    def _record_gate(self, assets_cache: str, job_id: int,
+                     gate_name: str, result: GateResult) -> str:
+        """Persist a gate result to the job workspace."""
+        path = gate_result_file(assets_cache, job_id, gate_name)
+        write_json(path, asdict(result))
+        return path
+
+    def _enforce_gate(self, conn, job_id: int, gate_name: str,
+                      result: GateResult,
+                      failed_at: str = "") -> dict[str, Any] | None:
+        """Return a failure response dict if gate hard-failed, or None."""
+        if not result.passed and result.severity == "hard_fail":
+            logger.error("%s FAILED (hard): %s", gate_name, result.message)
+            update_job_status(conn, job_id, "FAILED", result.message)
+            return {
+                "status": "failed",
+                "failed_at": failed_at,
+                "reason": result.message,
+                "job_id": job_id,
+            }
+        return None
+
     def run_pipeline(
         self,
         topic: str,
@@ -64,6 +90,7 @@ class Orchestrator:
         # G1: Input Preflight
         g1 = GateInputPreflight()
         g1_result = g1.evaluate(topic=topic, niche_config={"name": niche})
+        self._record_gate(assets_cache, 0, "G1_input_preflight", g1_result)
         if not g1_result.passed:
             logger.error("G1 Preflight FAILED: %s", g1_result.message)
             update_job_status(conn, 0, "FAILED", g1_result.message)
@@ -84,6 +111,7 @@ class Orchestrator:
             # G2: Cost Estimate
             g2 = GateCostEstimate()
             cost_result = g2.evaluate()
+            self._record_gate(assets_cache, job_id, "G2_cost_estimate", cost_result)
 
             # Safety Agent (via delegating method for testability)
             logger.info("G2: running Safety agent")
@@ -109,7 +137,8 @@ class Orchestrator:
 
             # G3: Research Cache Check
             g3 = GateResearchCache()
-            g3.evaluate()
+            g3_result = g3.evaluate()
+            self._record_gate(assets_cache, job_id, "G3_research_cache", g3_result)
 
             # Researcher Agent
             logger.info("G3: running Researcher agent")
@@ -124,6 +153,7 @@ class Orchestrator:
             g4_result = g4.evaluate(
                 risk_flags=research_output.get("risk_flags", []),
             )
+            self._record_gate(assets_cache, job_id, "G4_post_research_risk", g4_result)
             if not g4_result.passed and g4_result.severity == "hard_fail":
                 update_job_status(conn, job_id, "FAILED", g4_result.message)
                 return {
@@ -135,13 +165,18 @@ class Orchestrator:
 
             # G5: Source Quality
             g5 = GateSourceQuality()
-            g5.evaluate(
+            g5_result = g5.evaluate(
                 video_sources=research_output.get("sources", []),
             )
+            self._record_gate(assets_cache, job_id, "G5_source_quality", g5_result)
+            if abort := self._enforce_gate(conn, job_id, "G5", g5_result,
+                                            failed_at="source_quality"):
+                return abort
 
             # G6: Creative Memory
             g6 = GateCreativeMemory()
-            g6.evaluate()
+            g6_result = g6.evaluate()
+            self._record_gate(assets_cache, job_id, "G6_creative_memory", g6_result)
 
             # Scriptwriter Agent
             logger.info("G6: running Scriptwriter agent")
@@ -159,10 +194,11 @@ class Orchestrator:
             script_text = " ".join(
                 s.get("text", "") for s in script_scenes
             ) if isinstance(script_scenes, list) else str(script_scenes)
-            g7.evaluate(
+            g7_result = g7.evaluate(
                 script=script_text,
                 caption=script_output.get("caption", ""),
             )
+            self._record_gate(assets_cache, job_id, "G7_script_validation", g7_result)
 
             # Voice Producer Agent
             logger.info("G7: running Voice Producer agent")
@@ -177,7 +213,11 @@ class Orchestrator:
             g8 = GateAudioValidation()
             audio_list = voice_output.get("audio_files") or []
             first_audio = audio_list[0] if audio_list else None
-            g8.evaluate(audio_path=first_audio)
+            g8_result = g8.evaluate(audio_path=first_audio)
+            self._record_gate(assets_cache, job_id, "G8_audio_validation", g8_result)
+            if abort := self._enforce_gate(conn, job_id, "G8", g8_result,
+                                            failed_at="audio_validation"):
+                return abort
 
             # Visual Director Agent
             logger.info("G8: running Visual Director agent")
@@ -202,7 +242,11 @@ class Orchestrator:
             # G9: Asset Validation
             g9 = GateAssetValidation()
             asset_paths = [a.get("path", "") for a in visual_output.get("assets", [])]
-            g9.evaluate(asset_paths=asset_paths)
+            g9_result = g9.evaluate(asset_paths=asset_paths)
+            self._record_gate(assets_cache, job_id, "G9_asset_validation", g9_result)
+            if abort := self._enforce_gate(conn, job_id, "G9", g9_result,
+                                            failed_at="asset_validation"):
+                return abort
 
             # Composer Agent
             logger.info("G9: running Composer agent")
@@ -228,7 +272,11 @@ class Orchestrator:
 
             # G10: Video Validation
             g10 = GateVideoValidation()
-            g10.evaluate(video_path=compose_output.get("video_path"))
+            g10_result = g10.evaluate(video_path=compose_output.get("video_path"))
+            self._record_gate(assets_cache, job_id, "G10_video_validation", g10_result)
+            if abort := self._enforce_gate(conn, job_id, "G10", g10_result,
+                                            failed_at="video_validation"):
+                return abort
 
             # Reviewer Agent
             logger.info("G10: running Reviewer agent")
