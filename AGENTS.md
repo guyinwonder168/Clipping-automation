@@ -4,8 +4,8 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phase 0-9 complete with bug fixes).
-- All 248 tests pass (85%+ line coverage). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment.
+- **Greenfield project** — early implementation phase (Phases 0-10 complete).
+- All 257 tests pass (96% line coverage). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system.
 
 ## Python Commands
 
@@ -87,7 +87,7 @@ refactor: brief description of refactor
 ```
 phase/0-scaffolding     phase/4-agent-framework   phase/8-config-prompts
 phase/1-config          phase/5-agents            phase/9-docker
-phase/2-database        phase/6-orchestrator
+phase/2-database        phase/6-orchestrator      phase/10-env-config-fix
 phase/3-services        phase/7-dashboard
 ```
 

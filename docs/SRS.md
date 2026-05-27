@@ -1,8 +1,8 @@
 # Clipper Agency — Software Requirements Specification
 
-**Version:** 2.1
+**Version:** 2.2
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-9)
+**Status:** Final — MVP Implementation Complete (Phase 0-10)
 **Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -122,6 +122,7 @@ ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagem
 
 - **No secrets stored in database** — only environment variable name references.
 - Secrets via `.env` (local) or environment variables (production).
+- `.env` loaded at CLI entry point via `python-dotenv` `load_dotenv()` in `__main__.py`; `pydantic-settings` `AppSettings` provides typed access for dashboard and CLI.
 - Dashboard shows `configured ✅` or `missing ❌`, never exposes values.
 
 ### 5.2 Authentication & Authorization

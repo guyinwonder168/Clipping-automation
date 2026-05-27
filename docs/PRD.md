@@ -1,8 +1,8 @@
 # Clipper Agency — Product Requirements Document
 
-**Version:** 2.1
+**Version:** 2.2
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-9)
+**Status:** Final — MVP Implementation Complete (Phase 0-10)
 **Related:** `docs/SRS.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---

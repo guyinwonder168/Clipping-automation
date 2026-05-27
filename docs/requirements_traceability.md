@@ -1,8 +1,8 @@
 # Clipper Agency — Requirements Traceability Matrix
 
-**Version:** 2.1
+**Version:** 2.2
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-9)
+**Status:** Final — MVP Implementation Complete (Phase 0-10)
 
 ---
 
@@ -58,7 +58,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 36 | SQLite MVP → PostgreSQL scale | SRS §6, Design §2 |
 | 37 | No GPU required | PRD §11, SRS §1 |
 | 38 | Python 3.11+, FFmpeg 5.0+ | SRS §1 |
-| 39 | No secrets in DB, env vars only | SRS §5, Design §2 |
+| 39 | No secrets in DB, env vars only; `.env` loaded via `python-dotenv` `load_dotenv()` at CLI entry, typed via `pydantic-settings` `AppSettings` | SRS §5, Design §2, Design §9 |
 | 40 | Financial data restricted to privileged roles | PRD §13, SRS §5 |
 | 41 | Data retention schedule | SRS §6.3 |
 | 42 | 7 MVP agents | Design §4 |

@@ -1,8 +1,8 @@
 # Clipper Agency — Technical Design Document
 
-**Version:** 3.1
+**Version:** 3.2
 **Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-9)
+**Status:** Final — MVP Implementation Complete (Phase 0-10)
 **Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
 
 ---
@@ -47,7 +47,7 @@ Seven MVP agents, each independently configurable and observable. Orchestrator c
 | **Database** | SQLite → PostgreSQL | Same schema, swap for scale |
 | **Queue** | None/sequential (MVP) → DB-backed → Redis + RQ/Celery | Avoid overhead until multi-account |
 | **LLM Access** | OpenRouter API | Large Language Model (LLM) access, multi-model, single key |
-| **Secrets** | Environment variables / `.env` | No secrets in DB |
+| **Secrets** | `python-dotenv` + `pydantic-settings` `AppSettings` | `.env` loaded at CLI entry (`__main__.py`); services use `os.getenv()`. No secrets in DB. |
 | **Prompts** | Filesystem (`prompts/`) | Git-tracked, versioned |
 | **Container** | Docker Compose | VPS-ready |
 
@@ -476,6 +476,16 @@ niche:
     - soft_wording_for_unverified
   caption_style: short_with_hashtags
 ```
+
+### Environment Configuration Layer
+
+Below the agent-default level, the system loads base configuration from `.env` via `python-dotenv`:
+
+- **`AppSettings`** (`pydantic-settings` `BaseSettings`) — typed config class at `clipper_agency/config/schema.py` mapping env vars 1:1 (uppercased) to fields.
+- **`load_dotenv()`** — called once at `clipper_agency/__main__.py` import time, before any service reads `os.getenv()`.
+- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`.
+- **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`.
+- **Test isolation:** Tests must use both `AppSettings(_env_file=None)` and `patch.dict(os.environ, {}, clear=True)` to prevent the user's `.env` (loaded by `load_dotenv()` at import) from leaking into test expectations.
 
 ---
 
