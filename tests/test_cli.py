@@ -76,17 +76,21 @@ class TestRunCommand:
         assert result.exit_code != 0
         assert "Missing option" in result.output or "Error" in result.output
 
-    def test_run_with_topic_echoes_input(self):
+    @patch("clipper_agency.orchestrator.engine.Orchestrator.run_pipeline")
+    def test_run_with_topic_echoes_input(self, mock_run):
         """run command should echo the topic back."""
+        mock_run.return_value = {"status": "completed", "job_id": 1, "output": {}}
         runner = CliRunner()
-        result = runner.invoke(cli, ["run", "--topic", "Test topic"])
+        result = runner.invoke(cli, ["run", "--topic", "Test topic", "--db", ":memory:"])
         assert result.exit_code == 0
         assert "Test topic" in result.output
 
-    def test_run_with_niche_default(self):
+    @patch("clipper_agency.orchestrator.engine.Orchestrator.run_pipeline")
+    def test_run_with_niche_default(self, mock_run):
         """run command should show the niche."""
+        mock_run.return_value = {"status": "completed", "job_id": 1, "output": {}}
         runner = CliRunner()
-        result = runner.invoke(cli, ["run", "--topic", "Test", "--niche", "custom_niche"])
+        result = runner.invoke(cli, ["run", "--topic", "Test", "--niche", "custom_niche", "--db", ":memory:"])
         assert result.exit_code == 0
         assert "custom_niche" in result.output
 
