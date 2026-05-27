@@ -8,14 +8,16 @@ from clipper_agency.services.firecrawl_service import FirecrawlService
 
 
 def test_service_init():
-    svc = FirecrawlService()
-    assert svc.api_key is None
+    with patch.dict("os.environ", {}, clear=True):
+        svc = FirecrawlService()
+        assert svc.api_key is None
 
 
 def test_search_no_key():
-    svc = FirecrawlService()
-    with pytest.raises(ValueError, match="FIRECRAWL_API_KEY"):
-        svc.search("test query")
+    with patch.dict("os.environ", {}, clear=True):
+        svc = FirecrawlService()
+        with pytest.raises(ValueError, match="FIRECRAWL_API_KEY"):
+            svc.search("test query")
 
 
 @patch("httpx.Client")

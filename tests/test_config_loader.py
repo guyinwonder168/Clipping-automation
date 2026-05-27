@@ -1,6 +1,8 @@
 """Tests for config YAML loader (load_niche, load_template, load_config)."""
 
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -13,8 +15,23 @@ class TestLoadSettings:
 
     def test_load_settings_returns_app_settings(self):
         settings = load_settings()
-        assert settings.data_dir == Path("data")
+        assert settings.db_path == "data/clipper.db"
         assert settings.debug is False
+
+    def test_load_settings_reads_env_vars(self):
+        """Verify that environment variables are picked up by AppSettings."""
+        with patch.dict(os.environ, {"DB_PATH": "/tmp/test.db", "OUTPUT_DIR": "/tmp/out"}):
+            settings = load_settings()
+            assert settings.db_path == "/tmp/test.db"
+            assert str(settings.output_dir) == "/tmp/out"
+
+    def test_load_settings_defaults_when_env_unset(self):
+        """Verify defaults when env vars are not set."""
+        with patch.dict(os.environ, {}, clear=True):
+            settings = load_settings()
+            assert settings.db_path == "data/clipper.db"
+            assert str(settings.output_dir) == "outputs"
+            assert str(settings.assets_cache) == "assets/cache"
 
 
 class TestLoadNiche:
@@ -72,7 +89,7 @@ class TestLoadConfig:
     def test_load_config_returns_dict_with_settings(self):
         config = load_config()
         assert isinstance(config, dict)
-        assert "data_dir" in config
+        assert "db_path" in config
         assert config["debug"] is False
 
     def test_load_config_merges_user_yaml(self, fixtures_dir, monkeypatch):
@@ -82,4 +99,4 @@ class TestLoadConfig:
         # Should contain niche config merged in
         assert config.get("name") == "indonesian_artists"
         # Still has app settings
-        assert "data_dir" in config
+        assert "db_path" in config

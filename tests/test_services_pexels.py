@@ -8,14 +8,16 @@ from clipper_agency.services.pexels import PexelsService
 
 
 def test_service_init():
-    svc = PexelsService()
-    assert svc.api_key is None
+    with patch.dict("os.environ", {}, clear=True):
+        svc = PexelsService()
+        assert svc.api_key is None
 
 
 def test_search_videos_no_key():
-    svc = PexelsService()
-    with pytest.raises(ValueError, match="PEXELS_API_KEY"):
-        svc.search_videos("concert")
+    with patch.dict("os.environ", {}, clear=True):
+        svc = PexelsService()
+        with pytest.raises(ValueError, match="PEXELS_API_KEY"):
+            svc.search_videos("concert")
 
 
 @patch("httpx.Client")
