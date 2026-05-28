@@ -31,8 +31,8 @@ class OutputPackager:
         # Validate path before probing
         if not video_path or not isinstance(video_path, str):
             return ValidationResult(valid=False, message="invalid video path")
-        safe_path = os.path.normpath(video_path)
-        if not safe_path or safe_path in (os.path.sep, "."):
+        safe_path = os.path.abspath(video_path)
+        if not os.path.isfile(safe_path):
             return ValidationResult(valid=False, message="invalid video path")
 
         info = probe_video(safe_path)
