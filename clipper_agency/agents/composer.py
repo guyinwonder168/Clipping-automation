@@ -44,37 +44,9 @@ class ComposerAgent(BaseAgent):
         voice_files = audio_files or []
 
         # ── FFmpeg preflight diagnostics ──
-        try:
-            preflight = FFmpegPreflight.probe()
-        except Exception as exc:
-            logger.error("Composer: FFmpeg preflight probe failed: %s", exc)
-            return {
-                "status": "failed",
-                "error": f"FFmpeg preflight probe failed: {exc}",
-            }
-        preflight_dir = (
-            Path(output_dir) / f"job_{job_id}" / "agents" / "composer"
-        )
-        preflight_dir.mkdir(parents=True, exist_ok=True)
-        write_json(
-            preflight_dir / "preflight.json",
-            dataclasses.asdict(preflight),
-        )
-        if not preflight.all_ok():
-            logger.error(
-                "Composer: FFmpeg preflight failed — ffmpeg=%s ffprobe=%s "
-                "libx264=%s aac=%s mp3=%s",
-                preflight.ffmpeg_found,
-                preflight.ffprobe_found,
-                preflight.libx264_available,
-                preflight.aac_available,
-                preflight.mp3_decode_available,
-            )
-            return {
-                "status": "failed",
-                "error": "FFmpeg preflight failed",
-                "preflight": dataclasses.asdict(preflight),
-            }
+        preflight_result = self._run_preflight(output_dir, job_id)
+        if preflight_result is not None:
+            return preflight_result
 
         assets_cache = kwargs.get("assets_cache", "")
         agent_dir = ""
@@ -153,6 +125,41 @@ class ComposerAgent(BaseAgent):
                 "thumbnail_path": "",
             }
 
+    def _run_preflight(self, output_dir: str, job_id: int) -> dict[str, Any] | None:
+        """Run FFmpeg preflight.  Returns a failure dict or ``None`` on success."""
+        try:
+            preflight = FFmpegPreflight.probe()
+        except Exception:
+            logger.exception("Composer: FFmpeg preflight probe failed")
+            return {
+                "status": "failed",
+                "error": "FFmpeg preflight probe failed",
+            }
+        preflight_dir = (
+            Path(output_dir) / f"job_{job_id}" / "agents" / "composer"
+        )
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            preflight_dir / "preflight.json",
+            dataclasses.asdict(preflight),
+        )
+        if not preflight.all_ok():
+            logger.error(
+                "Composer: FFmpeg preflight failed — ffmpeg=%s ffprobe=%s "
+                "libx264=%s aac=%s mp3=%s",
+                preflight.ffmpeg_found,
+                preflight.ffprobe_found,
+                preflight.libx264_available,
+                preflight.aac_available,
+                preflight.mp3_decode_available,
+            )
+            return {
+                "status": "failed",
+                "error": "FFmpeg preflight failed",
+                "preflight": dataclasses.asdict(preflight),
+            }
+        return None
+
     def _persist_diagnostics(self, agent_dir: str, ffmpeg_cmd: list | str,
                               stderr_text: str) -> None:
         """Save FFmpeg command and stderr to agent artifact directory."""
@@ -163,6 +170,50 @@ class ComposerAgent(BaseAgent):
         if stderr_text:
             log_file = Path(agent_dir) / "ffmpeg_stderr.log"
             log_file.write_text(stderr_text)
+
+    def _process_scene(
+        self,
+        temp_dir: Path,
+        normalizer: Any,
+        card_gen: Any,
+        scene_num: int,
+        scene_path: str,
+    ) -> tuple[str | None, bool]:
+        """Process a single scene: validate, normalize, or generate card fallback.
+
+        Returns ``(output_path, was_card_fallback)``.
+        """
+        validation = SceneValidator.validate(scene_path)
+
+        if validation.valid:
+            norm_path = temp_dir / f"scene_{scene_num}_norm.mp4"
+            result = normalizer.normalize(scene_path, str(norm_path))
+            if result.success:
+                return str(result.path), False
+            logger.warning(
+                "Composer: normalize failed scene %d — card fallback: %s",
+                scene_num, result.error,
+            )
+        else:
+            logger.info(
+                "Composer: scene %d invalid (%s) — card fallback",
+                scene_num, "; ".join(validation.issues[:2]),
+            )
+
+        # Generate card fallback
+        card_mp4 = temp_dir / f"scene_{scene_num}_card.mp4"
+        card_png = temp_dir / f"card_{scene_num}.png"
+        card_gen.generate(
+            CardType.CONTEXT, f"Scene {scene_num}", str(card_png),
+        )
+        ctv = card_to_video(str(card_png), str(card_mp4), duration=5)
+        if ctv.success:
+            return str(card_mp4), True
+        logger.error(
+            "Composer: card_to_video failed scene %d: %s",
+            scene_num, ctv.error,
+        )
+        return None, True
 
     def _build_filter(
         self, assets: list[dict], audio_files: list[str]
@@ -216,65 +267,14 @@ class ComposerAgent(BaseAgent):
             for i, asset in enumerate(assets):
                 scene_path = asset.get("path", "")
                 scene_num = int(asset.get("scene", i + 1))
-
-                validation = SceneValidator.validate(scene_path)
-
-                if validation.valid:
-                    # ── Normalize existing valid scene ──
-                    norm_path = temp_dir / f"scene_{scene_num}_norm.mp4"
-                    result = normalizer.normalize(
-                        scene_path, str(norm_path),
-                    )
-                    if result.success:
-                        normalized_scene_paths.append(str(norm_path))
-                    else:
-                        # Normalize failed → fall back to card
-                        logger.warning(
-                            "Composer: normalize failed scene %d — "
-                            "using card fallback: %s",
-                            scene_num, result.error,
-                        )
-                        card_fallback_scenes.append(scene_num)
-                        card_mp4 = temp_dir / f"scene_{scene_num}_card.mp4"
-                        card_png = temp_dir / f"card_{scene_num}.png"
-                        card_gen.generate(
-                            CardType.CONTEXT, f"Scene {scene_num}",
-                            str(card_png),
-                        )
-                        ctv = card_to_video(
-                            str(card_png), str(card_mp4), duration=5,
-                        )
-                        if ctv.success:
-                            normalized_scene_paths.append(str(card_mp4))
-                        else:
-                            logger.error(
-                                "Composer: card_to_video failed scene %d: %s",
-                                scene_num, ctv.error,
-                            )
-                else:
-                    # ── Generate card fallback for missing/invalid scene ──
+                norm_path, was_card = self._process_scene(
+                    temp_dir, normalizer, card_gen,
+                    scene_num, scene_path,
+                )
+                if norm_path:
+                    normalized_scene_paths.append(norm_path)
+                if was_card:
                     card_fallback_scenes.append(scene_num)
-                    logger.info(
-                        "Composer: scene %d invalid (%s) — "
-                        "generating card fallback",
-                        scene_num, "; ".join(validation.issues[:2]),
-                    )
-                    card_mp4 = temp_dir / f"scene_{scene_num}_card.mp4"
-                    card_png = temp_dir / f"card_{scene_num}.png"
-                    card_gen.generate(
-                        CardType.CONTEXT, f"Scene {scene_num}",
-                        str(card_png),
-                    )
-                    ctv = card_to_video(
-                        str(card_png), str(card_mp4), duration=5,
-                    )
-                    if ctv.success:
-                        normalized_scene_paths.append(str(card_mp4))
-                    else:
-                        logger.error(
-                            "Composer: card_to_video failed scene %d: %s",
-                            scene_num, ctv.error,
-                        )
 
             # ── Filter out empty entries (scenes where card gen failed) ──
             valid_normalized = [p for p in normalized_scene_paths if p]

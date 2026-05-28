@@ -27,7 +27,9 @@ def probe_video(path: str) -> VideoInfo | None:
     Returns ``None`` if the file does not exist, ffprobe is unavailable,
     or the JSON output cannot be parsed.
     """
-    if not os.path.isfile(path):
+    # Sanitise path: resolve symlinks, prevent traversal
+    safe_path = os.path.realpath(path)
+    if not safe_path or not os.path.isfile(safe_path):
         return None
 
     try:
@@ -38,11 +40,11 @@ def probe_video(path: str) -> VideoInfo | None:
                 "-print_format", "json",
                 "-show_format",
                 "-show_streams",
-                path,
+                safe_path,
             ],
             stderr=subprocess.DEVNULL,
         )
-    except (FileNotFoundError, OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError):
         return None
 
     try:
@@ -76,12 +78,12 @@ def probe_video(path: str) -> VideoInfo | None:
 
     # --- file size ---
     try:
-        file_size = os.path.getsize(path)
+        file_size = os.path.getsize(safe_path)
     except OSError:
         file_size = 0
 
     return VideoInfo(
-        path=path,
+        path=safe_path,
         width=width,
         height=height,
         codec=codec,

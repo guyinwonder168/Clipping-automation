@@ -284,7 +284,7 @@ class TestComposerCardFallback:
                 shutil.copy(input_path, output_path)
             else:
                 Path(output_path).write_bytes(b"normalized data" * 100)
-            return NormalizeResult(path=input_path, success=True)
+            return NormalizeResult(path=output_path, success=True)
 
         mock_norm.normalize = mocker.Mock(side_effect=norm_side_effect)
 
@@ -350,7 +350,7 @@ class TestComposerCardFallback:
         def norm_side_effect(input_path, output_path):
             import shutil
             shutil.copy(input_path, output_path)
-            return NormalizeResult(path=input_path, success=True)
+            return NormalizeResult(path=output_path, success=True)
 
         mock_norm.normalize = mocker.Mock(side_effect=norm_side_effect)
 
@@ -399,7 +399,7 @@ class TestComposerCardFallback:
             import shutil
             shutil.copy(input_path, output_path)
             normed_outputs.append(output_path)
-            return NormalizeResult(path=input_path, success=True)
+            return NormalizeResult(path=output_path, success=True)
 
         mock_norm.normalize = mocker.Mock(side_effect=norm_side_effect)
 

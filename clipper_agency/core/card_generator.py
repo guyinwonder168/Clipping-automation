@@ -21,7 +21,12 @@ class CardGenerator:
     # Sensible colour defaults (config overrides in Phase 15)
     BG_COLOR = (20, 20, 30)          # dark navy
     TEXT_COLOR = (255, 255, 255)     # white
-    ACCENT_COLOR = (64, 180, 255)    # light blue
+    ACCENT_COLORS = {
+        CardType.HEADLINE: (64, 180, 255),
+        CardType.FACT: (255, 180, 64),
+        CardType.CONTEXT: (64, 180, 255),
+        CardType.CTA: (100, 255, 100),
+    }
 
     def __init__(self, font_path: str | None = None) -> None:
         self._font_path = font_path
@@ -30,6 +35,11 @@ class CardGenerator:
         """Generate a 1080x1920 PNG card with centred wrapped text."""
         img = Image.new("RGB", (self.WIDTH, self.HEIGHT), self.BG_COLOR)
         draw = ImageDraw.Draw(img)
+
+        # Accent bar at top based on card type
+        accent = self.ACCENT_COLORS.get(card_type, (64, 180, 255))
+        bar_height = 8
+        draw.rectangle([(0, 0), (self.WIDTH, bar_height)], fill=accent)
 
         # Load font with fallback
         try:

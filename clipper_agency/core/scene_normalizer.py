@@ -73,8 +73,7 @@ class SceneNormalizer:
                     error=f"FFmpeg exit code {proc.returncode}",
                     stderr=proc.stderr.decode(errors="replace"),
                 )
-            return NormalizeResult(path=input_path, success=True)
-        except FileNotFoundError:
+            return NormalizeResult(path=output_path, success=True)
             return NormalizeResult(
                 path=input_path, success=False, error="FFmpeg not found"
             )

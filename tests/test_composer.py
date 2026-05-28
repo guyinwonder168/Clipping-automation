@@ -81,6 +81,20 @@ class TestComposerArtifacts:
     def test_persists_output_json(self, tmp_path, mocker):
         mocker.patch("subprocess.run")
         mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
+        mocker.patch(
+            "clipper_agency.core.scene_validator.SceneValidator.validate",
+            return_value=mocker.MagicMock(valid=True, issues=[]),
+        )
+        mocker.patch("clipper_agency.core.media_probe.probe_video",
+                     return_value=mocker.MagicMock(
+                         width=1080, height=1920, codec="h264",
+                         duration=30.0, has_audio=False,
+                         pix_fmt="yuv420p", file_size=10000))
+        mock_norm = mocker.MagicMock(success=True, error="")
+        mocker.patch(
+            "clipper_agency.core.scene_normalizer.SceneNormalizer.normalize",
+            return_value=mock_norm,
+        )
         agent = ComposerAgent()
         agent.execute(
             job_id=33,
@@ -119,6 +133,21 @@ class TestComposerArtifacts:
         mocker.patch("dataclasses.asdict", return_value={"ffmpeg_found": True})
         mocker.patch("subprocess.run", side_effect=err)
         mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
+        # Bypass scene validation/normalization — only concat should fail
+        mocker.patch(
+            "clipper_agency.core.scene_validator.SceneValidator.validate",
+            return_value=mocker.MagicMock(valid=True, issues=[]),
+        )
+        mocker.patch("clipper_agency.core.media_probe.probe_video",
+                     return_value=mocker.MagicMock(
+                         width=1080, height=1920, codec="h264",
+                         duration=30.0, has_audio=False,
+                         pix_fmt="yuv420p", file_size=10000))
+        mock_norm = mocker.MagicMock(success=True, error="")
+        mocker.patch(
+            "clipper_agency.core.scene_normalizer.SceneNormalizer.normalize",
+            return_value=mock_norm,
+        )
         agent = ComposerAgent()
         agent.execute(
             job_id=34,
