@@ -138,6 +138,35 @@ class TestVoiceProducerFallback:
         assert len(attempts) == 3
         assert all(a["status"] == "missing_key" for a in attempts)
 
+    def test_fish_audio_alias_key_enables_fish_provider(self, tmp_path, monkeypatch):
+        """The documented FISHAUDIO_KEY alias should pass pre-checks."""
+        monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
+        monkeypatch.setenv("FISHAUDIO_KEY", "fish-alias-key")
+
+        agent = VoiceProducerAgent()
+
+        def _create(provider):
+            assert provider == "fish_audio"
+            return _mock_service(True)
+
+        with mock.patch.object(agent, "_create_service", side_effect=_create):
+            result = agent.execute(
+                job_id=5,
+                script=SCENES,
+                assets_cache=str(tmp_path),
+            )
+
+        assert result["status"] == "completed"
+        attempts = result["attempts"]
+        assert [a["status"] for a in attempts] == [
+            "missing_key",
+            "missing_key",
+            "success",
+        ]
+        assert attempts[-1]["provider"] == "fish_audio"
+
 
 # ---------------------------------------------------------------------------
 # Artifact persistence tests

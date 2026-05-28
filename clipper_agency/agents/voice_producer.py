@@ -30,11 +30,11 @@ _voice_ids = {
 # Provider priority — tried in this order
 _PROVIDER_ORDER = ["elevenlabs", "gemini_tts", "fish_audio"]
 
-# Map provider name → env var
+# Map provider name → accepted env vars
 _PROVIDER_KEYS = {
-    "elevenlabs": "ELEVENLABS_API_KEY",
-    "gemini_tts": "GEMINI_API_KEY",
-    "fish_audio": "FISH_AUDIO_API_KEY",
+    "elevenlabs": ("ELEVENLABS_API_KEY",),
+    "gemini_tts": ("GEMINI_API_KEY",),
+    "fish_audio": ("FISH_AUDIO_API_KEY", "FISHAUDIO_KEY"),
 }
 
 
@@ -129,8 +129,8 @@ class VoiceProducerAgent(BaseAgent):
 
         Returns an attempt dict with status, audio_files, and error.
         """
-        key_env = _PROVIDER_KEYS.get(provider, "")
-        if not os.getenv(key_env):
+        key_envs = _PROVIDER_KEYS.get(provider, ())
+        if not any(os.getenv(key_env) for key_env in key_envs):
             logger.info("Voice: %s — missing key", provider)
             return {"provider": provider, "status": "missing_key",
                     "audio_files": []}

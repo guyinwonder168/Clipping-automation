@@ -143,7 +143,7 @@ class Orchestrator:
     def _stage_research(
         self, conn: Any, job_id: int, topic: str,
         safety_rules: list[str], assets_cache: str, output_dir: str,
-    ) -> dict[str, Any] | dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run G3→Researcher→G4→G5.
 
         Returns research_output dict on success or a failure dict.
@@ -237,7 +237,7 @@ class Orchestrator:
         research_output: dict[str, Any],
         script_output: dict[str, Any], voice_output: dict[str, Any],
         assets_cache: str, output_dir: str,
-    ) -> dict[str, Any] | dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run Visual→G9→Composer→G10.
 
         Returns compose_output dict on success or a failure dict.

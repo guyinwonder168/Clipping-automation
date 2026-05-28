@@ -30,9 +30,11 @@ class OutputPackager:
             final_thumbnail = out / "thumbnail.png"
             meta_file = out / "metadata.json"
 
-            # Copy video
-            if video_path and Path(video_path).exists():
-                shutil.copy2(video_path, final_video)
+            # Copy video unless composer already wrote the final path.
+            source_video = Path(video_path) if video_path else None
+            if source_video and source_video.exists():
+                if source_video.resolve() != final_video.resolve():
+                    shutil.copy2(source_video, final_video)
             else:
                 return {
                     "status": "failed",
