@@ -1,6 +1,6 @@
 # Clipper Agency — Technical Design Document
 
-**Version:** 3.5
+**Version:** 3.6
 **Date:** 2026-05-28
 **Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
 **Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`, `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
@@ -276,6 +276,23 @@ FAILED → any earlier state (Admin/Creative Lead triggers retry from that point
 - Config snapshot frozen at job creation time; resume uses same snapshot even if global config changed.
 - Cached research may be stale after pause — G3 re-checks cache freshness on resume.
 - ScrapeCreators credits re-validated on resume (G2 re-checks credits).
+
+**Phase 12 retry/resume boundary:** Phase 12 is read-only observability first. It persists agent inputs/outputs, gate results, job manifests, and debug views so failures can be diagnosed safely, but it does not expose write-enabled retry/resume commands yet. Phase 13 adds human-triggered mutation commands only after these prerequisites are reliable:
+
+```text
+python3 -m clipper_agency job-retry 125 --from composer
+python3 -m clipper_agency job-resume 125
+python3 -m clipper_agency job-retry 125 --from voice_producer --use-cache
+```
+
+Required before enabling those commands:
+
+- `agent_states` accurately transitions `pending`/`running`/`completed`/`failed`.
+- Gate results are persisted and enforce hard-fail stops.
+- Job config snapshots are stored and reused.
+- Agent input/output artifacts are persisted.
+- Paid provider calls can be skipped when valid cached artifacts exist.
+- Retry policy remains human-triggered only; no automatic retry loops.
 
 ---
 
