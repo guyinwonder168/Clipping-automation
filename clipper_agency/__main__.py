@@ -291,7 +291,17 @@ def job_retry(job_id: int, from_agent: str, use_cache: bool) -> None:
 
     click.echo(f"Job #{job_id}: reset agents {reset_names} to pending.")
     click.echo(f"  Retry from: {from_agent}{cache_flag}")
-    click.echo(f"  Earlier successful outputs preserved.")
+
+    # Execute the pipeline from the target agent
+    orch = Orchestrator(db_path=_db_path())
+    result = orch.run_pipeline_from(job_id, from_agent=from_agent,
+                                    use_cache=use_cache)
+
+    if result.get("status") == "completed":
+        click.echo(f"\N{check mark} Retry completed! Job #{job_id}")
+    else:
+        reason = result.get("reason") or result.get("error") or "Unknown"
+        click.echo(f"\N{cross mark} Retry failed: {reason}")
 
 
 @cli.command("job-resume")
@@ -348,7 +358,17 @@ def job_resume(job_id: int) -> None:
 
     click.echo(f"Job #{job_id}: resumed from {target_agent}.")
     click.echo(f"  Reset agents: {reset_names}")
-    click.echo(f"  Earlier successful outputs preserved.")
+
+    # Execute the pipeline from the resume point
+    orch = Orchestrator(db_path=_db_path())
+    result = orch.run_pipeline_from(job_id, from_agent=target_agent,
+                                    use_cache=True)
+
+    if result.get("status") == "completed":
+        click.echo(f"\N{check mark} Resume completed! Job #{job_id}")
+    else:
+        reason = result.get("reason") or result.get("error") or "Unknown"
+        click.echo(f"\N{cross mark} Resume failed: {reason}")
 
 
 # ── test-agent subcommand ──────────────────────────────────────────────────

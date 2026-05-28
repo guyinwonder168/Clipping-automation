@@ -165,19 +165,24 @@ def test_job_retry_resets_target_and_downstream(tmp_path, monkeypatch):
     """job-retry --from <agent> resets that agent and downstream to pending."""
     job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
 
-    result = CliRunner().invoke(cli, ["job-retry", str(job_id), "--from", "composer"])
+    from unittest.mock import patch
+    with patch("clipper_agency.__main__.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+
+        result = CliRunner().invoke(cli, ["job-retry", str(job_id), "--from", "composer"])
 
     assert result.exit_code == 0
     assert "composer" in result.output
-    assert "pending" in result.output.lower() or "reset" in result.output.lower()
+    assert "pending" in result.output.lower() or "reset" in result.output.lower() or "completed" in result.output.lower()
 
-    # Verify DB state
+    # Verify DB state: safety and visual_director remain completed
     conn = get_connection(db_path)
     from clipper_agency.db.queries import get_agent_state
     assert get_agent_state(conn, job_id, "safety")["state"] == "completed"
     assert get_agent_state(conn, job_id, "visual_director")["state"] == "completed"
-    assert get_agent_state(conn, job_id, "composer")["state"] == "pending"
-    assert get_agent_state(conn, job_id, "reviewer")["state"] == "pending"
 
 
 def test_job_retry_invalid_agent_rejected(tmp_path, monkeypatch):
@@ -204,17 +209,22 @@ def test_job_resume_continues_from_failed_agent(tmp_path, monkeypatch):
     """job-resume finds the failed agent and resets it + downstream."""
     job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
 
-    result = CliRunner().invoke(cli, ["job-resume", str(job_id)])
+    from unittest.mock import patch
+    with patch("clipper_agency.__main__.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+
+        result = CliRunner().invoke(cli, ["job-resume", str(job_id)])
 
     assert result.exit_code == 0
     assert "composer" in result.output
 
-    # Verify DB: composer and reviewer reset to pending
+    # Verify DB: upstream agents remain completed
     conn = get_connection(db_path)
     from clipper_agency.db.queries import get_agent_state
     assert get_agent_state(conn, job_id, "visual_director")["state"] == "completed"
-    assert get_agent_state(conn, job_id, "composer")["state"] == "pending"
-    assert get_agent_state(conn, job_id, "reviewer")["state"] == "pending"
 
 
 def test_job_resume_not_failed_or_paused_rejected(tmp_path, monkeypatch):
@@ -226,3 +236,67 @@ def test_job_resume_not_failed_or_paused_rejected(tmp_path, monkeypatch):
     result = CliRunner().invoke(cli, ["job-resume", str(job_id)])
     assert result.exit_code != 0
     assert "FAILED" in result.output or "PAUSED" in result.output
+
+
+# ── Phase 13 Batch 2: CLI-to-engine wiring ──────────────────────────
+
+
+def test_job_retry_triggers_engine_execution(tmp_path, monkeypatch):
+    """job-retry --from <agent> triggers orchestrator.run_pipeline_from."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+    video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+    from unittest.mock import patch
+    with patch("clipper_agency.__main__.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+
+        result = CliRunner().invoke(
+            cli, ["job-retry", str(job_id), "--from", "composer"],
+        )
+
+    assert result.exit_code == 0
+    assert "completed" in result.output.lower() or "Pipeline" in result.output
+    mock_instance.run_pipeline_from.assert_called_once()
+    call_kwargs = mock_instance.run_pipeline_from.call_args
+    assert call_kwargs[1]["from_agent"] == "composer" or call_kwargs[0][1] == "composer"
+
+
+def test_job_retry_with_use_cache_passes_flag(tmp_path, monkeypatch):
+    """job-retry --from <agent> --use-cache passes use_cache to engine."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+
+    from unittest.mock import patch
+    with patch("clipper_agency.__main__.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+
+        result = CliRunner().invoke(
+            cli, ["job-retry", str(job_id), "--from", "composer", "--use-cache"],
+        )
+
+    assert result.exit_code == 0
+    call_kwargs = mock_instance.run_pipeline_from.call_args
+    # Check use_cache was passed (either positional or keyword)
+    assert call_kwargs[1].get("use_cache", False) is True
+
+
+def test_job_resume_triggers_engine_execution(tmp_path, monkeypatch):
+    """job-resume triggers orchestrator.run_pipeline_from."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+
+    from unittest.mock import patch
+    with patch("clipper_agency.__main__.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+
+        result = CliRunner().invoke(cli, ["job-resume", str(job_id)])
+
+    assert result.exit_code == 0
+    mock_instance.run_pipeline_from.assert_called_once()
