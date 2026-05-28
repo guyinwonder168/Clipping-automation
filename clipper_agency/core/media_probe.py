@@ -30,11 +30,9 @@ def probe_video(path: str) -> VideoInfo | None:
     # Validate path: guard against traversal and ensure readable file
     if not path or not isinstance(path, str):
         return None
-    safe_path = os.path.normpath(path)
-    if not safe_path or safe_path in (os.path.sep, "."):
+    if not os.path.isfile(path):
         return None
-    if not os.path.isfile(safe_path):
-        return None
+    safe_path: str = os.path.realpath(path)
 
     try:
         raw = subprocess.check_output(
