@@ -12,6 +12,7 @@ from clipper_agency.db.queries import get_job
 
 BINARY_SUFFIXES = {".mp3", ".wav", ".mp4", ".png", ".jpg", ".jpeg", ".webp"}
 SECRET_TERMS = ("secret", "token", "password", "api_key", "apikey", "authorization")
+_REDACTED = "[redacted]"
 
 
 def summarize_jobs(conn: sqlite3.Connection, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -142,7 +143,7 @@ def _read_json(path: Path) -> Any:
 
 def _sanitize(value: Any) -> Any:
     if isinstance(value, dict):
-        return {key: ("[redacted]" if _looks_secret(key) else _sanitize(item)) for key, item in value.items()}
+        return {key: (_REDACTED if _looks_secret(key) else _sanitize(item)) for key, item in value.items()}
     if isinstance(value, list):
         return [_sanitize(item) for item in value]
     if isinstance(value, str):
@@ -153,7 +154,7 @@ def _sanitize(value: Any) -> Any:
 def _sanitize_text(value: str) -> str:
     redacted = value
     for term in SECRET_TERMS:
-        redacted = redacted.replace(term.upper(), "[redacted]").replace(term, "[redacted]")
+        redacted = redacted.replace(term.upper(), _REDACTED).replace(term, _REDACTED)
     return redacted
 
 

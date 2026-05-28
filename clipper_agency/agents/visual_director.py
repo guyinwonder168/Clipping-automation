@@ -131,7 +131,7 @@ class VisualDirectorAgent(BaseAgent):
         return plan
 
     def _download_assets(
-        self, plan: list[dict], job_id: int, scenes_dir: str
+        self, plan: list[dict], _job_id: int, scenes_dir: str
     ) -> list[dict]:
         assets: list[dict] = []
         pexels = PexelsService()

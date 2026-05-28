@@ -15,6 +15,8 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+_NONE = "- none"
+
 
 def _print_version(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
     if not value or ctx.resilient_parsing:
@@ -209,7 +211,7 @@ def job_debug(job_id: int) -> None:
     for gate in debug["gates"]:
         click.echo(f"- {gate['relative_path']} ({gate['size']} bytes)")
     if not debug["gates"]:
-        click.echo("- none")
+        click.echo(_NONE)
 
     manifest = debug["manifest"]
     click.echo(f"\nManifest: {manifest['path']} ({'found' if manifest['exists'] else 'missing'})")
@@ -222,7 +224,7 @@ def job_debug(job_id: int) -> None:
         else:
             click.echo(json.dumps(preview, indent=2, default=str))
     if not debug["previews"]:
-        click.echo("- none")
+        click.echo(_NONE)
 
 
 @cli.command("job-artifacts")
@@ -237,7 +239,7 @@ def job_artifacts(job_id: int) -> None:
             f"- {artifact['path']} type={artifact['type']} size={artifact['size']} bytes{binary}"
         )
     if not debug["artifacts"]:
-        click.echo("- none")
+        click.echo(_NONE)
 
 
 # ── test-agent subcommand ──────────────────────────────────────────────────

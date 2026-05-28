@@ -5,9 +5,14 @@ from pathlib import Path
 from typing import Any
 
 
+def _resolve_safe(path: str | Path) -> Path:
+    """Resolve *path* to eliminate ``..`` traversal components."""
+    return Path(path).resolve()
+
+
 def write_json(path: str | Path, data: Any) -> str:
     """Write JSON data to *path*, creating parent directories first."""
-    target = Path(path)
+    target = _resolve_safe(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         json.dumps(data, indent=2, default=str),
@@ -23,7 +28,7 @@ def read_json(path: str | Path) -> Any:
 
 def write_text(path: str | Path, content: str) -> str:
     """Write text content to *path*, creating parent directories first."""
-    target = Path(path)
+    target = _resolve_safe(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return str(target)
