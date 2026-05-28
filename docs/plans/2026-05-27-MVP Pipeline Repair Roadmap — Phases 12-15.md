@@ -407,7 +407,7 @@ git commit -m "feat: add artifact writer helpers"
 **Files:**
 - Modify: `clipper_agency/agents/safety.py`
 - Modify: `clipper_agency/orchestrator/engine.py`
-- Test: `tests/test_safety_agent.py` or create `tests/test_agent_artifacts.py`
+- Test: `tests/test_agent_artifacts.py`
 
 **Step 1: Write failing test**
 
