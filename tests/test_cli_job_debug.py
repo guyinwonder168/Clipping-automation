@@ -7,7 +7,10 @@ from click.testing import CliRunner
 from clipper_agency.__main__ import cli
 from clipper_agency.config.schema import AppSettings
 from clipper_agency.db.connection import get_connection
-from clipper_agency.db.queries import create_agent_state, create_job, mark_agent_failed
+from clipper_agency.db.queries import (
+    create_agent_state, create_job, get_agent_state,
+    mark_agent_completed, mark_agent_failed, update_job_status,
+)
 from clipper_agency.db.schema import initialize_schema
 
 
@@ -106,3 +109,120 @@ def test_job_debug_commands_missing_job_return_nonzero(tmp_path, monkeypatch):
 
     assert result.exit_code != 0
     assert "Job not found" in result.output
+
+
+# ── Phase 13: job-retry / job-resume CLI ────────────────────────────
+
+PIPELINE_AGENTS = [
+    "safety", "researcher", "scriptwriter",
+    "voice_producer", "visual_director", "composer", "reviewer",
+]
+
+
+def _create_failed_pipeline_job(tmp_path, monkeypatch):
+    """Create a FAILED job with completed upstream agents and failed composer."""
+    db_path = tmp_path / "clipper.db"
+    assets_cache = tmp_path / "assets" / "cache"
+    output_dir = tmp_path / "outputs"
+    conn = get_connection(db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, "Agnez Mo new single", "indonesian_artists")
+
+    for name in PIPELINE_AGENTS:
+        create_agent_state(conn, job_id, name)
+
+    # Upstream agents completed
+    for name in ["safety", "researcher", "scriptwriter", "voice_producer"]:
+        mark_agent_completed(conn, job_id, name)
+
+    # visual_director completed
+    mark_agent_completed(conn, job_id, "visual_director")
+
+    # composer failed
+    mark_agent_failed(conn, job_id, "composer", "FFmpeg crashed")
+
+    # Job status FAILED
+    update_job_status(conn, job_id, "FAILED", error_message="composer failed")
+
+    # Minimal manifest
+    job_cache = assets_cache / f"job_{job_id}"
+    job_cache.mkdir(parents=True)
+    (job_cache / "manifest.json").write_text(
+        json.dumps({"job_id": job_id}), encoding="utf-8",
+    )
+
+    settings = AppSettings(
+        _env_file=None,
+        db_path=str(db_path),
+        assets_cache=assets_cache,
+        output_dir=output_dir,
+    )
+    monkeypatch.setattr("clipper_agency.__main__.load_settings", lambda: settings)
+    return job_id, db_path
+
+
+def test_job_retry_resets_target_and_downstream(tmp_path, monkeypatch):
+    """job-retry --from <agent> resets that agent and downstream to pending."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(cli, ["job-retry", str(job_id), "--from", "composer"])
+
+    assert result.exit_code == 0
+    assert "composer" in result.output
+    assert "pending" in result.output.lower() or "reset" in result.output.lower()
+
+    # Verify DB state
+    conn = get_connection(db_path)
+    from clipper_agency.db.queries import get_agent_state
+    assert get_agent_state(conn, job_id, "safety")["state"] == "completed"
+    assert get_agent_state(conn, job_id, "visual_director")["state"] == "completed"
+    assert get_agent_state(conn, job_id, "composer")["state"] == "pending"
+    assert get_agent_state(conn, job_id, "reviewer")["state"] == "pending"
+
+
+def test_job_retry_invalid_agent_rejected(tmp_path, monkeypatch):
+    """job-retry --from rejects unknown agent names."""
+    job_id, _ = _create_failed_pipeline_job(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(cli, ["job-retry", str(job_id), "--from", "nonexistent"])
+    assert result.exit_code != 0
+
+
+def test_job_retry_not_failed_rejected(tmp_path, monkeypatch):
+    """job-retry rejects jobs that are not FAILED."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+    # Change status back to COMPLETED
+    conn = get_connection(db_path)
+    update_job_status(conn, job_id, "COMPLETED")
+
+    result = CliRunner().invoke(cli, ["job-retry", str(job_id), "--from", "composer"])
+    assert result.exit_code != 0
+    assert "FAILED" in result.output
+
+
+def test_job_resume_continues_from_failed_agent(tmp_path, monkeypatch):
+    """job-resume finds the failed agent and resets it + downstream."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(cli, ["job-resume", str(job_id)])
+
+    assert result.exit_code == 0
+    assert "composer" in result.output
+
+    # Verify DB: composer and reviewer reset to pending
+    conn = get_connection(db_path)
+    from clipper_agency.db.queries import get_agent_state
+    assert get_agent_state(conn, job_id, "visual_director")["state"] == "completed"
+    assert get_agent_state(conn, job_id, "composer")["state"] == "pending"
+    assert get_agent_state(conn, job_id, "reviewer")["state"] == "pending"
+
+
+def test_job_resume_not_failed_or_paused_rejected(tmp_path, monkeypatch):
+    """job-resume rejects jobs that are not FAILED or PAUSED."""
+    job_id, db_path = _create_failed_pipeline_job(tmp_path, monkeypatch)
+    conn = get_connection(db_path)
+    update_job_status(conn, job_id, "COMPLETED")
+
+    result = CliRunner().invoke(cli, ["job-resume", str(job_id)])
+    assert result.exit_code != 0
+    assert "FAILED" in result.output or "PAUSED" in result.output

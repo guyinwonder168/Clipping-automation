@@ -5,7 +5,7 @@ from clipper_agency.db.schema import initialize_schema
 from clipper_agency.db.queries import (
     create_job, get_job, update_job_status,
     create_agent_state, get_agent_state, update_agent_state,
-    list_jobs,
+    list_jobs, append_audit_log, reset_agents_from,
 )
 
 
@@ -175,4 +175,83 @@ def test_agent_state_transitions_in_order(temp_db_path):
     mark_agent_completed(conn, job_id, "safety")
     s3 = get_agent_state(conn, job_id, "safety")
     assert s3["state"] == "completed"
+    close_connection()
+
+
+# ── Phase 13: Audit log and retry helpers ──────────────────────────
+
+
+def test_append_audit_log_inserts_row(temp_db_path):
+    """append_audit_log inserts a row with all fields."""
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+
+    append_audit_log(
+        conn, action="job_retry", actor="cli",
+        resource_type="job", resource_id=42,
+        details='{"from_agent": "composer"}',
+    )
+
+    rows = conn.execute("SELECT * FROM audit_log").fetchall()
+    assert len(rows) == 1
+    row = dict(rows[0])
+    assert row["action"] == "job_retry"
+    assert row["actor"] == "cli"
+    assert row["resource_type"] == "job"
+    assert row["resource_id"] == 42
+    assert row["details"] == '{"from_agent": "composer"}'
+    assert row["created_at"] is not None
+    close_connection()
+
+
+def test_reset_agents_from_resets_target_and_downstream(temp_db_path):
+    """reset_agents_from resets the target agent and all downstream to pending."""
+    from clipper_agency.db.queries import mark_agent_completed, mark_agent_failed
+
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+
+    # Create full pipeline agents
+    for name in ["safety", "researcher", "scriptwriter",
+                 "voice_producer", "visual_director", "composer", "reviewer"]:
+        create_agent_state(conn, job_id, name)
+
+    # Mark early agents completed, composer failed
+    mark_agent_completed(conn, job_id, "safety")
+    mark_agent_completed(conn, job_id, "researcher")
+    mark_agent_completed(conn, job_id, "scriptwriter")
+    mark_agent_completed(conn, job_id, "voice_producer")
+    mark_agent_failed(conn, job_id, "composer", "render error")
+
+    # Reset from visual_director onward
+    reset_agents_from(conn, job_id, "visual_director")
+
+    # Upstream agents untouched
+    assert get_agent_state(conn, job_id, "safety")["state"] == "completed"
+    assert get_agent_state(conn, job_id, "researcher")["state"] == "completed"
+    assert get_agent_state(conn, job_id, "scriptwriter")["state"] == "completed"
+    assert get_agent_state(conn, job_id, "voice_producer")["state"] == "completed"
+
+    # Target and downstream reset to pending
+    assert get_agent_state(conn, job_id, "visual_director")["state"] == "pending"
+    assert get_agent_state(conn, job_id, "composer")["state"] == "pending"
+    assert get_agent_state(conn, job_id, "reviewer")["state"] == "pending"
+
+    # Cleared timestamps and errors
+    composer = get_agent_state(conn, job_id, "composer")
+    assert composer["error_message"] is None
+    assert composer["completed_at"] is None
+    close_connection()
+
+
+def test_reset_agents_from_invalid_agent_raises(temp_db_path):
+    """reset_agents_from raises ValueError for unknown agent name."""
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+
+    import pytest
+    with pytest.raises(ValueError, match="Unknown agent"):
+        reset_agents_from(conn, job_id, "nonexistent_agent")
     close_connection()
