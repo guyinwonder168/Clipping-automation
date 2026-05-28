@@ -556,7 +556,7 @@ class Orchestrator:
         self, conn: Any, job_id: int, topic: str,
         safety_rules: list[str], assets_cache: str,
         output_dir: str, from_idx: int,
-    ) -> tuple[dict[str, Any], dict | None]:
+    ) -> tuple[dict[str, Any] | None, dict | None]:
         """Run research if needed. Returns (research_output, abort)."""
         if from_idx > PIPELINE_ORDER.index("researcher"):
             return None, None
@@ -568,6 +568,58 @@ class Orchestrator:
         ) == "failed":
             return {}, research_result
         return research_result, None
+
+    def _retry_downstream_stages(
+        self, conn: Any, job_id: int, topic: str,
+        safety_rules: list[str], niche: str, output_dir: str,
+        assets_cache: str, from_idx: int, use_cache: bool,
+        research_output: dict[str, Any], script_output: dict[str, Any],
+        voice_output: dict[str, Any], visual_output: dict[str, Any],
+    ) -> dict | None:
+        """Run retry stages after research. Returns abort on failure."""
+        if from_idx <= PIPELINE_ORDER.index("scriptwriter"):
+            script_output = self._run_cached_or_fresh(
+                "scriptwriter", use_cache, assets_cache, job_id,
+                lambda: self._run_content_scriptwriter(
+                    conn, job_id, topic, safety_rules,
+                    research_output, assets_cache,
+                ),
+            )
+
+        if from_idx <= PIPELINE_ORDER.index("voice_producer"):
+            voice_output = self._run_cached_or_fresh(
+                "voice_producer", use_cache, assets_cache, job_id,
+                lambda: self._run_content_voice(
+                    conn, job_id, script_output,
+                    output_dir, assets_cache,
+                ),
+            )
+
+        if from_idx <= PIPELINE_ORDER.index("visual_director"):
+            visual_output = self._run_visual_director_phase(
+                conn, job_id, topic, research_output, script_output,
+                output_dir, assets_cache,
+            )
+
+        if from_idx <= PIPELINE_ORDER.index("composer"):
+            compose_output, abort = self._retry_composer_stage(
+                conn, job_id, visual_output, voice_output,
+                output_dir, assets_cache,
+            )
+            if abort:
+                return abort
+        else:
+            compose_output = self._load_agent_output(
+                assets_cache, job_id, "composer")
+
+        if from_idx <= PIPELINE_ORDER.index("reviewer"):
+            abort, _, _ = self._retry_review_and_package(
+                conn, job_id, topic, script_output, compose_output,
+                safety_rules, niche, output_dir, assets_cache,
+            )
+            if abort:
+                return abort
+        return None
 
     def run_pipeline_from(
         self, job_id: int, from_agent: str, use_cache: bool = False,
@@ -631,51 +683,13 @@ class Orchestrator:
             if fresh is not None:
                 research_output = fresh
 
-            # Stage: Content (scriptwriter + voice + gates G6-G8)
-            if from_idx <= PIPELINE_ORDER.index("scriptwriter"):
-                script_output = self._run_cached_or_fresh(
-                    "scriptwriter", use_cache, assets_cache, job_id,
-                    lambda: self._run_content_scriptwriter(
-                        conn, job_id, topic, safety_rules,
-                        research_output, assets_cache,
-                    ),
-                )
-
-            if from_idx <= PIPELINE_ORDER.index("voice_producer"):
-                voice_output = self._run_cached_or_fresh(
-                    "voice_producer", use_cache, assets_cache, job_id,
-                    lambda: self._run_content_voice(
-                        conn, job_id, script_output,
-                        output_dir, assets_cache,
-                    ),
-                )
-
-            # Stage: Composition (visual + composer + gates G9-G10)
-            if from_idx <= PIPELINE_ORDER.index("visual_director"):
-                visual_output = self._run_visual_director_phase(
-                    conn, job_id, topic, research_output, script_output,
-                    output_dir, assets_cache,
-                )
-
-            if from_idx <= PIPELINE_ORDER.index("composer"):
-                compose_output, abort = self._retry_composer_stage(
-                    conn, job_id, visual_output, voice_output,
-                    output_dir, assets_cache,
-                )
-                if abort:
-                    return abort
-            else:
-                compose_output = self._load_agent_output(
-                    assets_cache, job_id, "composer")
-
-            # Stage: Review + Package
-            if from_idx <= PIPELINE_ORDER.index("reviewer"):
-                abort, _, _ = self._retry_review_and_package(
-                    conn, job_id, topic, script_output, compose_output,
-                    safety_rules, niche, output_dir, assets_cache,
-                )
-                if abort:
-                    return abort
+            abort = self._retry_downstream_stages(
+                conn, job_id, topic, safety_rules, niche, output_dir,
+                assets_cache, from_idx, use_cache, research_output,
+                script_output, voice_output, visual_output,
+            )
+            if abort:
+                return abort
 
             update_job_status(conn, job_id, "COMPLETED")
             logger.info("Pipeline retry COMPLETED: job #%d", job_id)
