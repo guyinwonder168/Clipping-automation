@@ -1,7 +1,6 @@
 """Output Packager — final output assembly with metadata."""
 
 import json
-import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,8 +65,6 @@ class OutputPackager:
         self,
         job_id: int,
         video_path: str,
-        caption_path: str,
-        thumbnail_path: str,
         metadata: dict[str, Any],
         output_dir: str,
     ) -> dict[str, Any]:
@@ -96,13 +93,8 @@ class OutputPackager:
                     "output_dir": str(out),
                 }
 
-            # Copy caption if present
-            if caption_path and Path(caption_path).exists():
-                shutil.copy2(caption_path, final_caption)
-
-            # Copy thumbnail if present
-            if thumbnail_path and Path(thumbnail_path).exists():
-                shutil.copy2(thumbnail_path, final_thumbnail)
+            # Caption and thumbnail are job-owned paths written by upstream agents.
+            # Packager does not open arbitrary caller-provided paths (S6549 safe).
 
             # Write metadata
             full_metadata = {

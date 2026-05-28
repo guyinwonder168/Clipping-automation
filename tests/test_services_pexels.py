@@ -53,7 +53,7 @@ def test_download_video(mock_httpx, tmp_path):
 
     svc = PexelsService()
     out = tmp_path / "stock.mp4"
-    result = svc.download_video("https://example.com/video.mp4", str(out))
+    result = svc.download_video("https://example.com/video.mp4", str(tmp_path), "stock.mp4")
 
     assert result == str(out)
     assert out.read_bytes() == b"fake_video_data"
@@ -68,5 +68,5 @@ def test_download_video_handles_http_error(mock_httpx):
     mock_httpx.return_value.__enter__.return_value.get.return_value = mock_response
 
     svc = PexelsService()
-    result = svc.download_video("https://broken.example.com/video.mp4", "/tmp/test.mp4")
+    result = svc.download_video("https://broken.example.com/video.mp4", "/tmp", "test.mp4")
     assert result is None

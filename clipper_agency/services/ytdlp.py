@@ -4,6 +4,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 
 @dataclass
@@ -28,6 +29,11 @@ class YtDlpService:
         Returns:
             DownloadResult on success, None on failure.
         """
+        # Validate URL scheme and netloc before passing to subprocess.
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError(f"Invalid download URL: {url}")
+
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
 

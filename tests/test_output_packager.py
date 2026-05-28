@@ -26,26 +26,24 @@ class TestPackagerFileCopy:
                                        duration=30.0, has_audio=True))
         packager = OutputPackager()
         video_path, output_dir = self._job_video(tmp_path, 1)
-        caption_path = str(tmp_path / "caption.txt")
-        thumbnail_path = str(tmp_path / "thumb.png")
 
-        # Create dummy input files
-        Path(caption_path).write_text("caption")
-        Path(thumbnail_path).write_text("thumbnail")
+        # Pre-seed caption and thumbnail into job-owned directory
+        # (simulating what the orchestrator does before calling package)
+        job_dir = Path(output_dir) / "job_1"
+        (job_dir / "caption.txt").write_text("Test caption text")
+        (job_dir / "thumbnail.png").write_text("thumbnail data")
 
         result = packager.package(
             job_id=1,
             video_path=str(video_path),
-            caption_path=caption_path,
-            thumbnail_path=thumbnail_path,
             metadata={"topic": "Test", "date": "2026-05-27"},
             output_dir=output_dir,
         )
         assert result["status"] == "completed"
         assert Path(result["output_dir"]).exists()
         assert Path(result["video_path"]).exists()
-        assert Path(result["caption_path"]).exists()
-        assert Path(result["thumbnail_path"]).exists()
+        assert (job_dir / "caption.txt").exists()
+        assert (job_dir / "thumbnail.png").exists()
 
     def test_package_writes_metadata_json(self, tmp_path, mocker):
         mocker.patch("clipper_agency.output.packager.probe_video",
@@ -57,8 +55,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=2,
             video_path=str(video_path),
-            caption_path="",
-            thumbnail_path="",
             metadata={"topic": "K-pop"},
             output_dir=output_dir,
         )
@@ -78,8 +74,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=3,
             video_path=str(video_path),
-            caption_path="",
-            thumbnail_path="",
             metadata={"topic": "Test"},
             output_dir=output_dir,
         )
@@ -101,8 +95,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=6,
             video_path=str(final_video),
-            caption_path="",
-            thumbnail_path="",
             metadata={"topic": "Same file"},
             output_dir=str(output_dir),
         )
@@ -117,8 +109,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=4,
             video_path="/nonexistent/video.mp4",
-            caption_path="",
-            thumbnail_path="",
             metadata={},
             output_dir=output_dir,
         )
@@ -139,8 +129,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=5,
             video_path=str(final_video),
-            caption_path="",
-            thumbnail_path="",
             metadata={},
             output_dir=output_dir,
         )
@@ -163,8 +151,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=7,
             video_path=str(outside_video),
-            caption_path="",
-            thumbnail_path="",
             metadata={},
             output_dir=str(output_dir),
         )
@@ -183,8 +169,6 @@ class TestPackagerFileCopy:
         result = packager.package(
             job_id=8,
             video_path=str(outside_video),
-            caption_path="",
-            thumbnail_path="",
             metadata={},
             output_dir=str(tmp_path / "output"),
         )
