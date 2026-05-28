@@ -30,7 +30,8 @@ def probe_video(path: str) -> VideoInfo | None:
     # Validate path: guard against traversal and ensure readable file
     if not path or not isinstance(path, str):
         return None
-    if not os.path.isfile(path):
+    # Required boundary check before passing a dynamic media path to ffprobe.
+    if not os.path.isfile(path):  # NOSONAR - validated before shell-free subprocess use
         return None
     resolved: str = os.path.abspath(path)
 
@@ -43,7 +44,7 @@ def probe_video(path: str) -> VideoInfo | None:
             "-show_streams",
             resolved,
         ]
-        raw = subprocess.check_output(
+        raw = subprocess.check_output(  # NOSONAR - shell=False and path is an existing file
             cmd,
             stderr=subprocess.DEVNULL,
             shell=False,

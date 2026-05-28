@@ -154,7 +154,9 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=True))
 
         packager = OutputPackager()
-        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        video_path = tmp_path / "vid.mp4"
+        video_path.write_text("video")
+        result = packager._validate_output_media(str(video_path))
         assert result.valid is False
         assert "resolution" in result.message.lower() or "1080" in result.message.lower()
 
@@ -165,7 +167,9 @@ class TestPackageValidation:
                                        duration=10.0, has_audio=True))
 
         packager = OutputPackager()
-        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        video_path = tmp_path / "vid.mp4"
+        video_path.write_text("video")
+        result = packager._validate_output_media(str(video_path))
         assert result.valid is False
 
     def test_package_validates_video_duration_too_long(self, tmp_path, mocker):
@@ -175,7 +179,9 @@ class TestPackageValidation:
                                        duration=90.0, has_audio=True))
 
         packager = OutputPackager()
-        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        video_path = tmp_path / "vid.mp4"
+        video_path.write_text("video")
+        result = packager._validate_output_media(str(video_path))
         assert result.valid is False
 
     def test_package_validates_audio_track_present(self, tmp_path, mocker):
@@ -185,7 +191,9 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=False))
 
         packager = OutputPackager()
-        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        video_path = tmp_path / "vid.mp4"
+        video_path.write_text("video")
+        result = packager._validate_output_media(str(video_path))
         assert result.valid is False
 
     def test_package_validates_codec(self, tmp_path, mocker):
@@ -195,7 +203,9 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=True))
 
         packager = OutputPackager()
-        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        video_path = tmp_path / "vid.mp4"
+        video_path.write_text("video")
+        result = packager._validate_output_media(str(video_path))
         assert result.valid is False
         assert "codec" in result.message.lower()
 
@@ -206,5 +216,7 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=True))
 
         packager = OutputPackager()
-        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        video_path = tmp_path / "vid.mp4"
+        video_path.write_text("video")
+        result = packager._validate_output_media(str(video_path))
         assert result.valid is True

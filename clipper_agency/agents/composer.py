@@ -49,14 +49,9 @@ class ComposerAgent(BaseAgent):
             return preflight_result
 
         assets_cache = kwargs.get("assets_cache", "")
-        agent_dir = ""
-        if assets_cache:
-            agent_dir = ensure_agent_dir(assets_cache, job_id, "composer")
-            write_json(agent_input_file(assets_cache, job_id, "composer"), {
-                "job_id": job_id,
-                "video_asset_count": len(video_assets),
-                "audio_file_count": len(voice_files),
-            })
+        agent_dir = self._record_input(
+            assets_cache, job_id, len(video_assets), len(voice_files),
+        )
 
         logger.info(
             "Composer: %d video assets, %d audio files",
@@ -159,6 +154,25 @@ class ComposerAgent(BaseAgent):
                 "preflight": dataclasses.asdict(preflight),
             }
         return None
+
+    def _record_input(
+        self,
+        assets_cache: str,
+        job_id: int,
+        video_asset_count: int,
+        audio_file_count: int,
+    ) -> str:
+        """Persist Composer input diagnostics and return agent dir, if enabled."""
+        if not assets_cache:
+            return ""
+
+        agent_dir = ensure_agent_dir(assets_cache, job_id, "composer")
+        write_json(agent_input_file(assets_cache, job_id, "composer"), {
+            "job_id": job_id,
+            "video_asset_count": video_asset_count,
+            "audio_file_count": audio_file_count,
+        })
+        return agent_dir
 
     def _persist_diagnostics(self, agent_dir: str, ffmpeg_cmd: list | str,
                               stderr_text: str) -> None:
