@@ -1,7 +1,7 @@
 # MVP Pipeline Repair Roadmap — Phases 12-15
 
 > Phase 12 ✅ Complete (merged `c001685` on master via PR #15).
-> Phase 13 ✅ Complete (all 3 batches implemented on `phase/13-retry-resume-cache-reuse`, PR #16 open).
+> Phase 13 ✅ Complete (merged `497aa3c` on master via PR #16).
 
 **Goal:** Repair the MVP pipeline across Phases 12-15 so it matches the PRD/SRS/technical design: restartable job workspaces, persisted agent/gate contracts, retry/resume, correct media composition, template-driven rendering, and useful dashboard/CLI observability.
 
@@ -37,7 +37,7 @@ This is one roadmap for the remaining MVP cleanup. Each phase should still be im
 | Phase | Name | MVP Gap Fixed | Expected Branch |
 |---|---|---|---|
 | 12 | Artifact contracts + debug observability | Makes jobs inspectable, restartable in principle, and auditable. Fixes artifact layout, agent/gate dumps, DB state transitions, debug dashboard, and debug CLI. | `phase/12-artifact-layout-agent-contracts` |
-| 13 | Retry/resume + cache reuse | Makes jobs actually restartable at stages without wasting paid API calls. Adds `job-retry`, `job-resume`, config snapshots, and artifact reuse validation. | `phase/13-retry-resume-cache-reuse` — ✅ PR #16 open |
+| 13 | Retry/resume + cache reuse | Makes jobs actually restartable at stages without wasting paid API calls. Adds `job-retry`, `job-resume`, config snapshots, and artifact reuse validation. | `phase/13-retry-resume-cache-reuse` — ✅ PR #16 merged |
 | 14 | Media/composer correctness | Makes generated videos satisfy MVP output requirements: 9:16, 1080x1920, 20-60s, audio track, valid clips, generated card fallback, thumbnail, metadata stripping. | `phase/14-media-composer-correctness` |
 | 15 | Template rendering + full observability | Makes the three MVP templates real and upgrades dashboard from debug-first to production-useful observability. | `phase/15-template-rendering-observability` |
 
@@ -1471,7 +1471,7 @@ Only after approval if new fixes are needed.
 
 # Phase 13 — Retry/Resume + Cache Reuse
 
-**Status:** ✅ Complete. All 3 batches implemented on branch `phase/13-retry-resume-cache-reuse` (8 commits, PR #16 open).
+**Status:** ✅ Complete. Merged `497aa3c` on master via PR #16 (11 commits including SonarCloud fixes + CSRF protection).
 - **Batch 1** (merged to master): CLI `job-retry`/`job-resume` commands, config snapshot persistence, engine `run_pipeline_from`.
 - **Batch 2** (`94345fc`): Dashboard POST retry/resume routes with basic UI controls.
 - **Batch 3** (`5359499`): `validate_agent_cache` wired into engine — cached artifacts are validated before reuse; invalid cache falls through to re-running the agent.

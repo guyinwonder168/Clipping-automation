@@ -4,7 +4,7 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phases 0-12 complete).
+- **Greenfield project** — early implementation phase (Phases 0-13 complete).
 - All 385 offline tests pass (2 pre-existing `integration`-marked tests deselected — `test_full_pipeline_smoke` requires FFmpeg + paid API keys, 1 other requires API keys). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI + configurable TTS provider (ElevenLabs/Gemini TTS/Fish Audio fallback) + artifact workspace contract + job debug dashboard/CLI + job manifest + gated pipeline hard-fail enforcement + agent state DB transitions + retry/resume/cache-reuse via dashboard/CLI + CSRF-protected retry/resume routes.
 
 ## Python Commands
