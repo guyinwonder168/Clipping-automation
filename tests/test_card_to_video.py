@@ -40,6 +40,7 @@ class TestCardToVideo:
         }).encode())
         
         output = tmp_path / "card.mp4"
+        output.write_bytes(b"x" * 2048)  # probe_video needs file to exist
         result = card_to_video(str(card_path), str(output))
         
         assert result.success is True
