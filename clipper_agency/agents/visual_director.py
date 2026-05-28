@@ -1,6 +1,8 @@
 """Visual Director Agent — video asset sourcing and scene planning."""
 
+import datetime
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,7 @@ from clipper_agency.core.paths import (
 )
 from clipper_agency.services.pexels import PexelsService
 from clipper_agency.services.ytdlp import YtDlpService
+from clipper_agency.core.media_probe import probe_video
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,43 @@ class VisualDirectorAgent(BaseAgent):
 
             assets = self._download_assets(plan, job_id, scenes_dir)
 
+            # --- Build per-clip provenance ---
+            clips: dict[str, dict[str, Any]] = {}
+            for asset in assets:
+                scene_id = str(asset["scene"])
+                path = asset.get("path", "")
+
+                clip_data: dict[str, Any] = {"source": asset["source"]}
+
+                if path and os.path.isfile(path):
+                    info = probe_video(path)
+                    if info is not None:
+                        clip_data.update({
+                            "original_width": info.width,
+                            "original_height": info.height,
+                            "codec": info.codec,
+                            "duration": info.duration,
+                            "file_size": info.file_size,
+                            "probed": True,
+                            "probe_error": None,
+                        })
+                    else:
+                        clip_data.update({
+                            "probed": False,
+                            "probe_error": "ffprobe returned no data",
+                            "file_size": os.path.getsize(path),
+                        })
+                else:
+                    clip_data.update({
+                        "probed": False,
+                        "probe_error": "No file path available",
+                    })
+
+                clip_data["downloaded_at"] = (
+                    datetime.datetime.now(datetime.timezone.utc).isoformat()
+                )
+                clips[scene_id] = clip_data
+
             output = {"status": "completed", "assets": assets}
 
             if agent_dir:
@@ -79,6 +119,7 @@ class VisualDirectorAgent(BaseAgent):
                     "pexels_results": len(pexels_videos),
                     "source_url_count": len(urls),
                     "scene_count": len(plan),
+                    "clips": clips,
                 })
 
             logger.info("Visual: completed %d assets", len(assets))
