@@ -845,11 +845,11 @@ class Orchestrator:
         caption_dir.mkdir(parents=True, exist_ok=True)
         caption_path_file = caption_dir / "caption.txt"
         caption_path_file.write_text(caption.strip()[:150])
+        # Thumbnail is written directly to the job-owned directory by composer.
+        # Packager expects it at the fixed contract path (S6549 safe).
         return packager.package(
             job_id=job_id,
             video_path=video_path,
-            caption_path=str(caption_path_file),
-            thumbnail_path=thumbnail_path,
             metadata={"topic": topic, "niche": niche},
             output_dir=output_dir,
         )

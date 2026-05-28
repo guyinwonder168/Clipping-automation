@@ -58,13 +58,19 @@ class PexelsService:
                 for v in videos
             ]
 
-    def download_video(self, video_url: str, output_path: str) -> str | None:
+    def download_video(self, video_url: str, base_dir: str, filename: str) -> str | None:
         """Download a video file from a direct URL.
+
+        Constructs the output path internally from base_dir/filename
+        with containment validation to prevent path traversal (S6549 safe).
 
         Returns:
             The output file path on success, None on failure.
         """
-        path = Path(output_path)
+        base = Path(base_dir).resolve()
+        path = base / filename
+        path = path.resolve()
+        path.relative_to(base)  # containment check — raises ValueError on escape
         path.parent.mkdir(parents=True, exist_ok=True)
 
         try:

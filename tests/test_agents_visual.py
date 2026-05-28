@@ -63,7 +63,7 @@ class TestVisualDirectorExecute:
         )
         mocker.patch(
             "clipper_agency.services.pexels.PexelsService.download_video",
-            side_effect=lambda url, path: f"{path}/video_{url[-5:]}.mp4",
+            side_effect=lambda url, base_dir, filename: f"{base_dir}/{filename}",
         )
         mocker.patch(
             "clipper_agency.services.ytdlp.YtDlpService.download",

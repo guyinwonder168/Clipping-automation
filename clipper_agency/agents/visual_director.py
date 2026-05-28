@@ -193,8 +193,8 @@ class VisualDirectorAgent(BaseAgent):
                     "path": file_path,
                 })
             elif source == "pexels":
-                output_path = f"{scenes_dir}/scene_{scene_id}.mp4"
-                path = pexels.download_video(url, output_path)
+                path = pexels.download_video(url, scenes_dir,
+                                             f"scene_{scene_id}.mp4")
                 assets.append({
                     "scene": scene_id,
                     "source": source,
