@@ -159,7 +159,6 @@ def validate_agent_cache(
         all_issues.extend(r.issues)
 
     elif agent_name == "composer":
-        video_dir = Path(agent_dir(assets_cache, job_id, "composer"))
         # composer output.json contains video_path — also validate the actual file
         out_data = read_json(out_p)
         video_path = out_data.get("video_path", "")
