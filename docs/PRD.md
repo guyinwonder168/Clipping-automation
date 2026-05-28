@@ -34,7 +34,7 @@ Clipper Agency automates short-form video content production for social media. T
 | **Scale** | 1 client, 1 account |
 | **Niche** | Indonesian artist trending updates (infotainment) |
 | **Tone** | Casual, TikTok-style Bahasa Indonesia |
-| **Video** | 20-30 second vertical (9:16, 1080x1920) |
+| **Video** | 20-60 second vertical (9:16, 1080x1920) |
 | **Upload** | Manual (no TikTok API posting) |
 | **Media** | yt-dlp download (Layer 1 primary); Pexels fallback when no source URL or download fails; local user asset path accepted |
 | **Research** | ScrapeCreators (TikTok video/music) + Firecrawl (context/news) |
@@ -140,6 +140,7 @@ Safety always overrides cost saving.
 | yt-dlp download fails | Try next source URL (max 5 attempts). If none: Pexels/local asset/generated cards. |
 | Fewer than 2 usable sources | Proceed with 1 source + Pexels/generated cards. Log risk warning. |
 | Voice provider fails | Try configured fallback chain: ElevenLabs → Gemini TTS → Fish Audio. If all providers are missing or fail, stop clearly and record sanitized provider attempts. Admin/Creative Lead triggers retry. Max 3 retries per job. |
+| FFmpeg diagnostic fails | Pre-flight check fails before any render work — missing FFmpeg, libx264, aac, or mp3 support. Stop. Admin/Creative Lead must fix environment. |
 | FFmpeg render fails | Stop. Admin/Creative Lead triggers retry. Max 3 retries per job. |
 | Reviewer rejects | Recommend which step to retry. Admin/Creative Lead triggers. Max 2 retries. |
 | Variation exhausted | MVP: Admin/Creative Lead review required. Stage 2: Creative Director. |

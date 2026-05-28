@@ -4,7 +4,7 @@
 > Phase 13 ✅ Complete (merged `497aa3c` on master via PR #16).
 > Phase 14 ✅ Complete (merged `1f36918` on master via PR #17).
 
-**Goal:** Repair the MVP pipeline across Phases 12-15 so it matches the PRD/SRS/technical design: restartable job workspaces, persisted agent/gate contracts, retry/resume, correct media composition, template-driven rendering, and useful dashboard/CLI observability.
+**Goal:** Repair the MVP pipeline across Phases 12-15a so it matches the PRD/SRS/technical design: restartable job workspaces, persisted agent/gate contracts, retry/resume, correct media composition, and template-driven rendering.
 
 **Architecture:** Implement the cleanup as four reviewable MVP repair phases. Phase 12 creates the canonical per-job workspace under `settings.assets_cache`, persists each agent's `input.json`/`output.json`, persists every gate result, and keeps `settings.output_dir` only for final customer-ready packages. Phase 13 adds retry/resume and cache reuse. Phase 14 repairs media/composer correctness. Phase 15 completes template-driven rendering and full observability.
 
@@ -40,7 +40,7 @@ This is one roadmap for the remaining MVP cleanup. Each phase should still be im
 | 12 | Artifact contracts + debug observability | Makes jobs inspectable, restartable in principle, and auditable. Fixes artifact layout, agent/gate dumps, DB state transitions, debug dashboard, and debug CLI. | `phase/12-artifact-layout-agent-contracts` |
 | 13 | Retry/resume + cache reuse | Makes jobs actually restartable at stages without wasting paid API calls. Adds `job-retry`, `job-resume`, config snapshots, and artifact reuse validation. | `phase/13-retry-resume-cache-reuse` — ✅ PR #16 merged |
 | 14 | Media/composer correctness | Makes generated videos satisfy MVP output requirements: 9:16, 1080x1920, 20-60s, audio track, valid clips, generated card fallback, thumbnail, metadata stripping. | `phase/14-media-composer-correctness` — ✅ PR #17 merged |
-| 15 | Template rendering + full observability | Makes the three MVP templates real and upgrades dashboard from debug-first to production-useful observability. | `phase/15-template-rendering-observability` |
+| 15a | Template rendering | Makes the three MVP templates real: template loader (News Card, B-Roll Narration, Rapid Update) + caption overlays + transitions + template thumbnails. Full observability upgrade deferred to Stage 2 (SRS FR-14 is debug-first dashboard/CLI only). | `phase/15a-template-rendering` |
 
 Phases 12-15 are MVP repair work, not Stage 2+. Stage 2+ remains for scale, official APIs, advanced analytics, and broader provider expansion.
 
@@ -218,6 +218,8 @@ GEMINI_TTS_VOICE_NAME=Kore
 **Phase 12 branch:** `phase/12-artifact-layout-agent-contracts`
 
 **Phase 12 scope:** Tasks 1-18 below.
+
+**Note on retry/resume (Phase 13) and template rendering (Phase 15a):** Phase 12 is read-only observability first — it persists state for safe diagnosis but does not expose write-enabled retry commands (Phase 13) or template-based rendering (Phase 15a). These follow in subsequent phases.
 
 ---
 
@@ -1688,13 +1690,15 @@ Generate template-based `thumbnail.png` at 1080x1920.
 
 ---
 
-# Phase 15 — Template Rendering + Full Observability Dashboard
+# Phase 15a — Template Rendering
 
-**Phase 15 objective:** Complete the MVP creative/rendering promise: real template-driven video rendering and production-useful observability.
+**Phase 15a objective:** Complete the MVP creative/rendering promise: real template-driven video rendering with caption overlays, transitions, and template-specific thumbnails.
 
-**Expected branch:** `phase/15-template-rendering-observability`
+**Expected branch:** `phase/15a-template-rendering`
 
-## Phase 15 Required Capabilities
+**Related:** Full observability dashboard and CLI parity (caps 6-8) moved to `docs/design/evolution_plan.md` Stage 2 — they were recognized as scope creep beyond the MVP debug-first requirement (SRS FR-14).
+
+## Phase 15a Required Capabilities
 
 ### 1. Template loader
 
@@ -1769,62 +1773,9 @@ Add MVP-safe visual effects:
 - simple fade/cut transitions
 - no heavy GPU dependencies
 
-### 6. Full observability dashboard
-
-Upgrade the debug-first dashboard into a production-useful dashboard:
-
-```text
-polished pipeline timeline with status icons
-retry-from-step controls
-artifact browser with download buttons
-video preview
-audio preview
-thumbnail preview
-research brief preview
-script preview
-provider attempts timeline
-provider latency/cost summaries
-gate explanations
-filtered job history
-searchable logs
-dashboard notifications
-approval workflow integration hooks
-```
-
-### 7. Full observability CLI parity
-
-Expand CLI diagnostics to match dashboard data:
-
-```bash
-.venv/bin/python3 -m clipper_agency job-timeline 125
-.venv/bin/python3 -m clipper_agency job-open-artifact 125 --path agents/composer/ffmpeg_stderr.log
-.venv/bin/python3 -m clipper_agency job-export-debug-bundle 125
-```
-
-### 8. Debug bundle export
-
-Create a zip/tar artifact for support/debugging:
-
-```text
-job metadata
-manifest
-agent inputs/outputs
-gate results
-logs
-research brief
-script
-provider attempts
-ffmpeg logs
-final package metadata
-```
-
-Exclude secrets and large binaries by default unless explicitly requested.
-
-## Phase 15 Acceptance Criteria
+## Phase 15a Acceptance Criteria
 
 - All three `templates/*.yaml` files are actually loaded and used.
 - Final videos include template-specific captions/overlays/thumbnail treatment.
-- Dashboard can explain every job without reading the filesystem manually.
-- Dashboard supports retry-from-step controls built on Phase 13 retry/resume.
-- Operators can preview outputs and inspect failures from the browser.
-- CLI can export a sanitized debug bundle.
+- Observability stays at the Phase 12 debug-first level — retry-from-step controls and preview browsers are Stage 2 scope.
+- CLI observability stays at the Phase 13 debug commands — `job-timeline`, `job-open-artifact`, and `job-export-debug-bundle` are Stage 2 scope.

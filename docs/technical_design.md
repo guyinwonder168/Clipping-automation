@@ -31,8 +31,11 @@ Seven MVP agents, each independently configurable and observable. Orchestrator c
 - **Database-driven state** — each agent reads/writes `JobState` in DB.
 - Orchestrator checks DB to determine "can next agent run?"
 - Every agent state visible in dashboard (idle, running, completed, failed).
-- Jobs are restartable in principle from persisted DB state plus `ASSETS_CACHE/job_{id}` artifacts. Write-enabled retry/resume is added after the Phase 12 artifact/debug contract stabilizes.
-- **Manual retry from failed step** — no auto-retry loops in MVP.
+- Jobs are restartable from persisted DB state plus `ASSETS_CACHE/job_{id}` artifacts.
+- **Manual retry from failed step** — CLI `job-retry <id> --from <agent>` and dashboard POST `/jobs/<id>/retry` trigger `run_pipeline_from()` in the engine, which clears downstream agent states to `pending`, reuses valid cached artifacts, and restarts from the specified point. `job-resume <id>` (CLI) and `/jobs/<id>/resume` (dashboard) detect failed/paused state and auto-target the correct resume point.
+- **Cache reuse** — `validate_agent_cache()` checks persisted artifacts against deterministic rules (exists, non-zero, valid JSON/format/timing) before skipping a paid provider call. Invalid cache falls through to re-running the agent.
+- **Config snapshot** — job config is frozen at creation time and stored in `jobs.config_snapshot`; retries/resumes use the same snapshot even if global `.env` or niche config changed. Override flag available for explicit re-snapshot.
+- No auto-retry loops in MVP.
 - CLI and dashboard both create the same `jobs` record type.
 - Running jobs cannot be edited or retried until paused, failed, or completed.
 
@@ -45,7 +48,7 @@ ASSETS_CACHE/job_{id}/   # intermediate agent/gate artifacts, diagnostics, manif
 OUTPUT_DIR/job_{id}/     # final customer-ready package only
 ```
 
-`ASSETS_CACHE/job_{id}` contains agent `input.json`/`output.json`, gate result JSON, raw provider payloads, normalized research contracts, TTS provider attempts, FFmpeg diagnostics, and `manifest.json`. `OUTPUT_DIR/job_{id}` contains only `video.mp4`, `caption.txt`, `thumbnail.png`, and `metadata.json`.
+`ASSETS_CACHE/job_{id}` contains agent `input.json`/`output.json`, gate result JSON, raw provider payloads, normalized research contracts, TTS provider attempts, FFmpeg diagnostics, clip provenance records, generated cards, and `manifest.json`. `OUTPUT_DIR/job_{id}` contains only `video.mp4`, `caption.txt`, `thumbnail.png`, and `metadata.json`.
 
 ---
 
@@ -457,10 +460,40 @@ Downloaded clips (yt-dlp) and stock footage (Pexels) may also use an optional so
 - Reused media is still copied or referenced through the per-job workspace and recorded in provenance.
 - Cache invalidated by source URL change or manual cleanup per retention policy (SRS §6.3).
 
+### FFmpeg Preflight Diagnostic
+
+A deterministic preflight check runs before any render work (in the Orchestrator before Composer execution):
+
+| Check | Command | Purpose |
+|-------|---------|---------|
+| FFmpeg exists | `ffmpeg -version` | Basic availability |
+| FFprobe exists | `ffprobe -version` | Media probing required for G9/G10 |
+| libx264 available | `ffmpeg -encoders \| grep libx264` | H.264 encoding for final output |
+| aac support | `ffmpeg -encoders \| grep aac` | Audio encoding for final output |
+| mp3 decode | `ffmpeg -decoders \| grep mp3` | Decode voiceover files if provider-sourced as mp3 |
+
+If any check fails, the pipeline stops with a clear diagnostic message before spending time on expensive render operations. Results are logged and persisted in the job workspace.
+
+### Scene Normalization
+
+Every visual scene is normalized before concatenation to ensure deterministic output quality:
+
+| Property | Requirement |
+|----------|-------------|
+| Resolution | 1080x1920 (9:16 vertical) |
+| Codec | H.264 (libx264) |
+| Pixel format | yuv420p |
+| Clip duration | 1-5 seconds (clips <1s rejected as flash frames; >5s trimmed) |
+| Audio from source clips | Stripped unless the clip is intentionally retained safe stock media |
+| Metadata | Stripped (neutral platform-native appearance) |
+| Transformation applied | Re-encode → micro-crop if aspect ratio differs → brightness/hue shift → metadata strip |
+
+Normalization is performed by the Composer via FFmpeg filter chains before the concat demuxer. Each clip's transformation is recorded in `provenance.json` for audit.
+
 ### Generated Cards
 
 When no source clips or stock footage are available, the Visual Director generates text-based card images:
-- **Rendered by:** Pillow or FFmpeg drawtext filter.
+- **Rendered by:** Pillow (Python imaging library) — chosen for offline deterministic rendering without FFmpeg drawtext complexity for text-on-background cards. Cards are later converted to video segments via FFmpeg if integrated into the scene sequence.
 - **Format:** Static PNG at 1080x1920.
 - **Content:** Headline text from script + colored background from niche template + optional avatar.
 - **Style:** Fonts, colors, layout from niche config template definition.
