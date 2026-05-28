@@ -353,3 +353,123 @@ def test_job_detail_and_debug_api_return_404_for_missing_job(client, tmp_path):
 
     assert page_resp.status_code == 404
     assert api_resp.status_code == 404
+
+
+# ── Phase 13: Dashboard retry/resume POST routes ────────────────────
+
+
+def _create_retryable_job(tmp_path):
+    """Create a FAILED job suitable for retry/resume testing."""
+    from clipper_agency.db.queries import (
+        create_agent_state, create_job, mark_agent_completed,
+        mark_agent_failed, update_job_status,
+    )
+
+    db_path = tmp_path / "clipper.db"
+    assets_cache = tmp_path / "assets" / "cache"
+    output_dir = tmp_path / "outputs"
+
+    conn = get_connection(str(db_path))
+    initialize_schema(conn)
+    job_id = create_job(conn, "Retry test topic", "indonesian_artists",
+                        config_snapshot={
+                            "topic": "Retry test topic",
+                            "niche": "indonesian_artists",
+                            "output_dir": str(output_dir),
+                            "assets_cache": str(assets_cache),
+                        })
+
+    for name in ["safety", "researcher", "scriptwriter",
+                 "voice_producer", "visual_director", "composer", "reviewer"]:
+        create_agent_state(conn, job_id, name)
+
+    for name in ["safety", "researcher", "scriptwriter",
+                 "voice_producer", "visual_director"]:
+        mark_agent_completed(conn, job_id, name)
+
+    mark_agent_failed(conn, job_id, "composer", "FFmpeg crashed")
+    update_job_status(conn, job_id, "FAILED", "composer failed")
+
+    # Write manifest
+    job_cache = assets_cache / f"job_{job_id}"
+    job_cache.mkdir(parents=True)
+    (job_cache / "manifest.json").write_text(
+        json.dumps({"job_id": job_id, "agents": {}, "gates": {},
+                     "final_outputs": {}}),
+        encoding="utf-8",
+    )
+
+    settings = AppSettings(
+        _env_file=None,
+        db_path=str(db_path),
+        assets_cache=str(assets_cache),
+        output_dir=str(output_dir),
+    )
+    return job_id, settings
+
+
+def test_post_retry_triggers_engine(client, tmp_path):
+    """POST /jobs/<id>/retry triggers engine.run_pipeline_from."""
+    job_id, settings = _create_retryable_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings), \
+         patch("clipper_agency.dashboard.app.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+        resp = client.post(
+            f"/jobs/{job_id}/retry",
+            json={"from_agent": "composer", "use_cache": False},
+            headers=_auth_header(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json
+    assert data["status"] == "completed"
+    mock_instance.run_pipeline_from.assert_called_once()
+
+
+def test_post_resume_triggers_engine(client, tmp_path):
+    """POST /jobs/<id>/resume triggers engine.run_pipeline_from."""
+    job_id, settings = _create_retryable_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings), \
+         patch("clipper_agency.dashboard.app.Orchestrator") as MockOrch:
+        mock_instance = MockOrch.return_value
+        mock_instance.run_pipeline_from.return_value = {
+            "status": "completed", "job_id": job_id,
+        }
+        resp = client.post(
+            f"/jobs/{job_id}/resume",
+            headers=_auth_header(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json
+    assert data["status"] == "completed"
+    mock_instance.run_pipeline_from.assert_called_once()
+
+
+def test_post_retry_requires_from_agent(client, tmp_path):
+    """POST /jobs/<id>/retry rejects request without from_agent."""
+    job_id, settings = _create_retryable_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.post(
+            f"/jobs/{job_id}/retry",
+            json={"use_cache": False},
+            headers=_auth_header(),
+        )
+
+    assert resp.status_code == 400
+
+
+def test_post_retry_missing_job_returns_404(client, tmp_path):
+    """POST /jobs/99999/retry returns 404 for missing job."""
+    _, settings = _create_retryable_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.post(
+            "/jobs/99999/retry",
+            json={"from_agent": "composer"},
+            headers=_auth_header(),
+        )
+
+    assert resp.status_code == 404
