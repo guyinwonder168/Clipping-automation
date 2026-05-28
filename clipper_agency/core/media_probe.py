@@ -32,18 +32,19 @@ def probe_video(path: str) -> VideoInfo | None:
         return None
     if not os.path.isfile(path):
         return None
-    safe_path: str = os.path.realpath(path)
+    resolved: str = os.path.abspath(path)
 
     try:
+        cmd: list[str] = [
+            "ffprobe",
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            resolved,
+        ]
         raw = subprocess.check_output(
-            [
-                "ffprobe",
-                "-v", "quiet",
-                "-print_format", "json",
-                "-show_format",
-                "-show_streams",
-                safe_path,
-            ],
+            cmd,
             stderr=subprocess.DEVNULL,
             shell=False,
         )
@@ -81,12 +82,12 @@ def probe_video(path: str) -> VideoInfo | None:
 
     # --- file size ---
     try:
-        file_size = os.path.getsize(safe_path)
+        file_size = os.path.getsize(resolved)
     except OSError:
         file_size = 0
 
     return VideoInfo(
-        path=safe_path,
+        path=resolved,
         width=width,
         height=height,
         codec=codec,
