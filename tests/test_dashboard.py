@@ -420,7 +420,7 @@ def test_post_retry_triggers_engine(client, tmp_path):
         resp = client.post(
             f"/jobs/{job_id}/retry",
             json={"from_agent": "composer", "use_cache": False},
-            headers=_auth_header(),
+            headers=_auth_header() | _csrf_header(client),
         )
 
     assert resp.status_code == 200
@@ -440,13 +440,38 @@ def test_post_resume_triggers_engine(client, tmp_path):
         }
         resp = client.post(
             f"/jobs/{job_id}/resume",
-            headers=_auth_header(),
+            headers=_auth_header() | _csrf_header(client),
         )
 
     assert resp.status_code == 200
     data = resp.json
     assert data["status"] == "completed"
     mock_instance.run_pipeline_from.assert_called_once()
+
+
+def test_post_retry_requires_csrf_token(client, tmp_path):
+    """POST /jobs/<id>/retry requires a CSRF token."""
+    job_id, settings = _create_retryable_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.post(
+            f"/jobs/{job_id}/retry",
+            json={"from_agent": "composer", "use_cache": False},
+            headers=_auth_header(),
+        )
+
+    assert resp.status_code == 400
+
+
+def test_post_resume_requires_csrf_token(client, tmp_path):
+    """POST /jobs/<id>/resume requires a CSRF token."""
+    job_id, settings = _create_retryable_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.post(
+            f"/jobs/{job_id}/resume",
+            headers=_auth_header(),
+        )
+
+    assert resp.status_code == 400
 
 
 def test_post_retry_requires_from_agent(client, tmp_path):
@@ -456,7 +481,7 @@ def test_post_retry_requires_from_agent(client, tmp_path):
         resp = client.post(
             f"/jobs/{job_id}/retry",
             json={"use_cache": False},
-            headers=_auth_header(),
+            headers=_auth_header() | _csrf_header(client),
         )
 
     assert resp.status_code == 400
@@ -469,7 +494,7 @@ def test_post_retry_missing_job_returns_404(client, tmp_path):
         resp = client.post(
             "/jobs/99999/retry",
             json={"from_agent": "composer"},
-            headers=_auth_header(),
+            headers=_auth_header() | _csrf_header(client),
         )
 
     assert resp.status_code == 404

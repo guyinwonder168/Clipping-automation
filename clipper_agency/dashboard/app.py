@@ -124,7 +124,6 @@ def api_create_job():
 
 
 @app.route("/jobs/<int:job_id>/retry", methods=["POST"])
-@csrf.exempt
 @requires_auth
 def retry_job(job_id: int):
     """Retry a job from a specified agent.
@@ -149,7 +148,6 @@ def retry_job(job_id: int):
 
 
 @app.route("/jobs/<int:job_id>/resume", methods=["POST"])
-@csrf.exempt
 @requires_auth
 def resume_job(job_id: int):
     """Resume a FAILED or PAUSED job from the failed/paused agent."""
