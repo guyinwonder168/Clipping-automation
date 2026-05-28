@@ -845,11 +845,8 @@ class Orchestrator:
         caption_dir.mkdir(parents=True, exist_ok=True)
         caption_path_file = caption_dir / "caption.txt"
         caption_path_file.write_text(caption.strip()[:150])
-        # Write thumbnail to the same job-owned directory so Packager
-        # can find it via the fixed contract path (S6549 safe).
-        if thumbnail_path and Path(thumbnail_path).exists():
-            import shutil
-            shutil.copy2(thumbnail_path, caption_dir / "thumbnail.png")
+        # Thumbnail is written directly to the job-owned directory by composer.
+        # Packager expects it at the fixed contract path (S6549 safe).
         return packager.package(
             job_id=job_id,
             video_path=video_path,
