@@ -1,10 +1,17 @@
 """Artifact validation primitives — deterministic file + JSON checks."""
 
+import glob as _glob
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from clipper_agency.core.artifacts import read_json
+from clipper_agency.core.paths import (
+    agent_dir,
+    agent_output_file,
+    researcher_brief_file,
+    researcher_contract_file,
+)
 
 
 @dataclass(frozen=True)
@@ -94,3 +101,65 @@ def validate_video_file(path: str) -> ValidationResult:
     if size < 1024:
         return ValidationResult(False, [f"video file too small ({size} bytes)"])
     return ValidationResult(True)
+
+
+def validate_agent_cache(
+    assets_cache: str, job_id: int, agent_name: str,
+) -> ValidationResult:
+    """Validate all cached artifacts for *agent_name* before cache reuse.
+
+    Returns a single :class:`ValidationResult` combining all per-artifact
+    checks.  If any check fails the overall result is ``passed=False`` so
+    the engine can fall through to re-running the agent.
+    """
+    all_issues: list[str] = []
+
+    # 1. output.json must exist and be valid JSON for every agent.
+    out_path = agent_output_file(assets_cache, job_id, agent_name)
+    out_p = Path(out_path)
+    if not out_p.exists():
+        return ValidationResult(False, [f"output.json missing for {agent_name}"])
+    try:
+        read_json(out_p)
+    except (ValueError, OSError) as exc:
+        return ValidationResult(False, [f"output.json corrupt for {agent_name}: {exc}"])
+
+    # 2. Agent-specific artifact checks.
+    if agent_name == "researcher":
+        r1 = validate_research_contract(
+            researcher_contract_file(assets_cache, job_id))
+        r2 = validate_research_brief(
+            researcher_brief_file(assets_cache, job_id))
+        all_issues.extend(r1.issues)
+        all_issues.extend(r2.issues)
+
+    elif agent_name == "scriptwriter":
+        script_path = str(Path(agent_dir(assets_cache, job_id, "scriptwriter")) / "script.json")
+        r = validate_script(script_path)
+        all_issues.extend(r.issues)
+
+    elif agent_name == "voice_producer":
+        voices_dir = Path(agent_dir(assets_cache, job_id, "voice_producer")) / "voices"
+        voice_files = sorted(str(p) for p in voices_dir.glob("scene_*.mp3")) if voices_dir.exists() else []
+        r = validate_voice_files(voice_files)
+        all_issues.extend(r.issues)
+
+    elif agent_name == "visual_director":
+        scenes_dir = Path(agent_dir(assets_cache, job_id, "visual_director")) / "scenes"
+        scene_files = sorted(str(p) for p in scenes_dir.glob("scene_*.mp4")) if scenes_dir.exists() else []
+        r = validate_scene_files(scene_files)
+        all_issues.extend(r.issues)
+
+    elif agent_name == "composer":
+        video_dir = Path(agent_dir(assets_cache, job_id, "composer"))
+        video_candidates = sorted(str(p) for p in video_dir.glob("*.mp4")) if video_dir.exists() else []
+        # composer output.json contains video_path — also validate the actual file
+        out_data = read_json(out_p)
+        video_path = out_data.get("video_path", "")
+        if video_path:
+            r = validate_video_file(video_path)
+            all_issues.extend(r.issues)
+
+    # safety, reviewer — only output.json check (already done above).
+
+    return ValidationResult(len(all_issues) == 0, all_issues)

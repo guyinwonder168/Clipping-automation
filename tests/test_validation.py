@@ -7,6 +7,7 @@ import pytest
 
 from clipper_agency.core.validation import (
     ValidationResult,
+    validate_agent_cache,
     validate_research_contract,
     validate_research_brief,
     validate_script,
@@ -199,3 +200,161 @@ class TestValidateVideoFile:
         f = tmp_path / "tiny.mp4"; f.write_bytes(b"x" * 10)
         result = validate_video_file(str(f))
         assert result.passed is False
+
+
+def _write_json(path: Path, data: dict) -> None:
+    """Write JSON data creating parent dirs."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+
+
+class TestValidateAgentCache:
+    """Tests for validate_agent_cache — per-agent cache validation."""
+
+    def _cache_root(self, tmp_path: Path) -> str:
+        return str(tmp_path / "cache")
+
+    def test_missing_output_json_fails(self, tmp_path: Path):
+        """Agent with no output.json should fail."""
+        result = validate_agent_cache(self._cache_root(tmp_path), 1, "safety")
+        assert result.passed is False
+        assert any("output.json missing" in i for i in result.issues)
+
+    def test_corrupt_output_json_fails(self, tmp_path: Path):
+        """Agent with corrupt output.json should fail."""
+        cache = self._cache_root(tmp_path)
+        out = Path(cache) / "job_1" / "agents" / "safety" / "output.json"
+        _write_json(out, {"status": "completed"})
+        out.write_text("NOT JSON {{{")
+        result = validate_agent_cache(cache, 1, "safety")
+        assert result.passed is False
+        assert any("corrupt" in i for i in result.issues)
+
+    def test_safety_valid_with_output_json(self, tmp_path: Path):
+        """Safety agent only needs valid output.json."""
+        cache = self._cache_root(tmp_path)
+        out = Path(cache) / "job_1" / "agents" / "safety" / "output.json"
+        _write_json(out, {"status": "completed"})
+        result = validate_agent_cache(cache, 1, "safety")
+        assert result.passed is True
+
+    def test_researcher_valid_with_contract_and_brief(self, tmp_path: Path):
+        """Researcher needs output.json + research_contract.json + research_brief.md."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "researcher"
+        _write_json(agent / "output.json", {"status": "completed"})
+        _write_json(agent / "research_contract.json", {
+            "topic": "Test", "video_sources": [], "context_sources": [],
+            "cache_key": "t", "cache_freshness": "fresh",
+        })
+        (agent / "research_brief.md").write_text("# Brief\nContent")
+        result = validate_agent_cache(cache, 1, "researcher")
+        assert result.passed is True
+
+    def test_researcher_fails_missing_brief(self, tmp_path: Path):
+        """Researcher with contract but no brief should fail."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "researcher"
+        _write_json(agent / "output.json", {"status": "completed"})
+        _write_json(agent / "research_contract.json", {
+            "topic": "Test", "video_sources": [], "context_sources": [],
+            "cache_key": "t", "cache_freshness": "fresh",
+        })
+        result = validate_agent_cache(cache, 1, "researcher")
+        assert result.passed is False
+
+    def test_scriptwriter_valid(self, tmp_path: Path):
+        """Scriptwriter needs output.json + script.json with scenes."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "scriptwriter"
+        _write_json(agent / "output.json", {"status": "completed"})
+        _write_json(agent / "script.json", {
+            "scenes": [{"scene": 1, "text": "Hello"}],
+        })
+        result = validate_agent_cache(cache, 1, "scriptwriter")
+        assert result.passed is True
+
+    def test_scriptwriter_fails_empty_scenes(self, tmp_path: Path):
+        """Scriptwriter with empty scenes should fail."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "scriptwriter"
+        _write_json(agent / "output.json", {"status": "completed"})
+        _write_json(agent / "script.json", {"scenes": []})
+        result = validate_agent_cache(cache, 1, "scriptwriter")
+        assert result.passed is False
+
+    def test_voice_producer_valid(self, tmp_path: Path):
+        """Voice producer needs output.json + voice scene files."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "voice_producer"
+        _write_json(agent / "output.json", {"status": "completed"})
+        voices = agent / "voices"
+        voices.mkdir(parents=True)
+        (voices / "scene_1.mp3").write_bytes(b"x" * 100)
+        (voices / "scene_2.mp3").write_bytes(b"x" * 100)
+        result = validate_agent_cache(cache, 1, "voice_producer")
+        assert result.passed is True
+
+    def test_voice_producer_fails_empty_voices(self, tmp_path: Path):
+        """Voice producer with no voice files should fail."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "voice_producer"
+        _write_json(agent / "output.json", {"status": "completed"})
+        voices = agent / "voices"
+        voices.mkdir(parents=True)
+        # empty dir — no scene files
+        result = validate_agent_cache(cache, 1, "voice_producer")
+        assert result.passed is False
+
+    def test_visual_director_valid(self, tmp_path: Path):
+        """Visual director needs output.json + scene video files."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "visual_director"
+        _write_json(agent / "output.json", {"status": "completed"})
+        scenes = agent / "scenes"
+        scenes.mkdir(parents=True)
+        (scenes / "scene_1.mp4").write_bytes(b"x" * 100)
+        result = validate_agent_cache(cache, 1, "visual_director")
+        assert result.passed is True
+
+    def test_visual_director_fails_no_scenes(self, tmp_path: Path):
+        """Visual director with no scene files should fail."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "visual_director"
+        _write_json(agent / "output.json", {"status": "completed"})
+        scenes = agent / "scenes"
+        scenes.mkdir(parents=True)
+        result = validate_agent_cache(cache, 1, "visual_director")
+        assert result.passed is False
+
+    def test_composer_valid_with_video_path(self, tmp_path: Path):
+        """Composer with output.json pointing to valid video file."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "composer"
+        video = tmp_path / "video.mp4"
+        video.write_bytes(b"x" * 2048)
+        _write_json(agent / "output.json", {
+            "status": "completed", "video_path": str(video),
+        })
+        result = validate_agent_cache(cache, 1, "composer")
+        assert result.passed is True
+
+    def test_composer_fails_video_too_small(self, tmp_path: Path):
+        """Composer with video_path pointing to tiny file should fail."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "composer"
+        video = tmp_path / "tiny.mp4"
+        video.write_bytes(b"x" * 10)
+        _write_json(agent / "output.json", {
+            "status": "completed", "video_path": str(video),
+        })
+        result = validate_agent_cache(cache, 1, "composer")
+        assert result.passed is False
+
+    def test_reviewer_valid_with_output_json(self, tmp_path: Path):
+        """Reviewer only needs valid output.json."""
+        cache = self._cache_root(tmp_path)
+        agent = Path(cache) / "job_1" / "agents" / "reviewer"
+        _write_json(agent / "output.json", {"status": "completed"})
+        result = validate_agent_cache(cache, 1, "reviewer")
+        assert result.passed is True

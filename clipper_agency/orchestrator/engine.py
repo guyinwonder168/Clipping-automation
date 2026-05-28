@@ -21,6 +21,7 @@ from clipper_agency.core.manifest import (
     update_manifest_gate,
 )
 from clipper_agency.core.paths import gate_result_file
+from clipper_agency.core.validation import validate_agent_cache
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import (
     PIPELINE_ORDER,
@@ -435,6 +436,21 @@ class Orchestrator:
         except (FileNotFoundError, ValueError):
             return {}
 
+    def _try_load_cached(
+        self, assets_cache: str, job_id: int, agent_name: str,
+    ) -> dict[str, Any]:
+        """Validate cached artifacts and return output.json if valid.
+
+        Returns an empty dict when cache is invalid so the caller can
+        fall through to re-running the agent.
+        """
+        vr = validate_agent_cache(assets_cache, job_id, agent_name)
+        if not vr.passed:
+            logger.info("Cache invalid for %s job #%d: %s",
+                        agent_name, job_id, "; ".join(vr.issues))
+            return {}
+        return self._load_agent_output(assets_cache, job_id, agent_name)
+
     def run_pipeline_from(
         self, job_id: int, from_agent: str, use_cache: bool = False,
     ) -> dict[str, Any]:
@@ -508,7 +524,7 @@ class Orchestrator:
             # Stage: Content (scriptwriter + voice + gates G6-G8)
             if from_idx <= PIPELINE_ORDER.index("scriptwriter"):
                 if use_cache:
-                    cached = self._load_agent_output(
+                    cached = self._try_load_cached(
                         assets_cache, job_id, "scriptwriter")
                     if cached:
                         script_output = cached
@@ -525,7 +541,7 @@ class Orchestrator:
 
             if from_idx <= PIPELINE_ORDER.index("voice_producer"):
                 if use_cache:
-                    cached = self._load_agent_output(
+                    cached = self._try_load_cached(
                         assets_cache, job_id, "voice_producer")
                     if cached:
                         voice_output = cached

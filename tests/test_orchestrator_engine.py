@@ -1255,3 +1255,79 @@ class TestRunPipelineFrom:
         # Verify scriptwriter received the reconstructed research_brief
         sw_call = mock_sw.call_args[1]
         assert sw_call["research_brief"] == "Research brief text"
+
+    def test_use_cache_valid_skips_paid_agent(self, db_initialized, tmp_path):
+        """use_cache=True with valid artifacts should reuse cache, not re-run."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=["safety", "researcher", "scriptwriter",
+                              "voice_producer", "visual_director"],
+            failed_agent="composer",
+        )
+        # Write valid scriptwriter artifacts
+        sw_dir = Path(ac) / f"job_{job_id}" / "agents" / "scriptwriter"
+        sw_dir.mkdir(parents=True, exist_ok=True)
+        (sw_dir / "script.json").write_text(json.dumps(
+            {"scenes": [{"scene": 1, "text": "Halo!"}]}))
+        # Write valid voice producer artifacts
+        vp_dir = Path(ac) / f"job_{job_id}" / "agents" / "voice_producer" / "voices"
+        vp_dir.mkdir(parents=True, exist_ok=True)
+        (vp_dir / "scene_1.mp3").write_bytes(b"x" * 100)
+
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety, \
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_voice_producer") as mock_vp, \
+             patch.object(Orchestrator, "_run_composer") as mock_comp, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+            mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline_from(
+                job_id, from_agent="composer", use_cache=True)
+
+        assert result["status"] == "completed"
+        mock_safety.assert_not_called()
+        mock_sw.assert_not_called()
+        mock_vp.assert_not_called()
+        mock_comp.assert_called_once()
+
+    def test_use_cache_invalid_falls_through_to_rerun(self, db_initialized, tmp_path):
+        """use_cache=True with invalid artifacts should re-run the agent."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=["safety", "researcher", "scriptwriter",
+                              "voice_producer", "visual_director"],
+            failed_agent="composer",
+        )
+        # scriptwriter has output.json but NO script.json → validation fails
+        # (the _setup_completed_job only writes output.json, not script.json)
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety"), \
+             patch.object(Orchestrator, "_run_researcher"), \
+             patch.object(Orchestrator, "_run_content_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_content_voice"), \
+             patch.object(Orchestrator, "_run_composer") as mock_comp, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_sw.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+            mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline_from(
+                job_id, from_agent="scriptwriter", use_cache=True)
+
+        assert result["status"] == "completed"
+        # scriptwriter should be re-run because cache was invalid
+        mock_sw.assert_called_once()
