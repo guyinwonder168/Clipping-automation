@@ -44,6 +44,10 @@
 | FR-14 | Agent states, timestamps, failure summaries, gate results, and key artifact paths visible through debug-first dashboard/CLI observability | P0 | MVP |
 | FR-15 | Asset/cache layout: intermediate agent/gate artifacts under `ASSETS_CACHE/job_{id}`, final customer package under `OUTPUT_DIR/job_{id}`, with downloaded media cacheable to avoid redundant downloads | P0 | MVP |
 | FR-16 | Research data size guard: ScrapeCreators responses trimmed via `trim=true` + field extraction; researcher LLM input capped at 40K chars to prevent token overflow | P0 | MVP |
+| FR-17 | Human-triggered retry and resume: CLI `job-retry <id> --from <agent>` re-runs from a specified agent, CLI `job-resume <id>` continues from a failed/paused stage; dashboard POST `/jobs/<id>/retry` and `/jobs/<id>/resume` routes provide the same controls | P0 | MVP |
+| FR-18 | FFmpeg preflight diagnostic: before any render work, check `ffmpeg exists`, `ffprobe exists`, libx264 available, aac support, mp3 decode; fail clearly with diagnostic message if any missing | P0 | MVP |
+| FR-19 | Generated card fallback: when no video clips or stock footage are available for a scene, generate 1080x1920 text-based PNG cards (headline, fact, context, CTA) using Pillow, styled from niche template; usage-only-cards condition escalates risk warning to Reviewer | P1 | MVP |
+| FR-20 | Deterministic video validation (G10): before Reviewer multimodal spend, validate `video.mp4` exists, non-zero, 9:16 aspect ratio, 1080x1920, duration 20-60s, audio track present, h264/aac codec, metadata stripped | P0 | MVP |
 
 ### 2.2 User Interfaces
 

@@ -47,20 +47,52 @@ Manual: user enters post URL + platform + account + posted_at + job_id after upl
 - Creative Director Agent: proposes new angles/templates when variation exhausted
 - Full observability dashboard beyond Phase 12's debug-first internal pages
 
-### Full Observability Dashboard
+### Full Observability Dashboard and CLI
 
-Phase 12 adds read-only debug-first job pages/API so operators can see where a job failed. The polished production dashboard remains Stage 2+ scope:
+The debug-first dashboard (Phase 12) and read-only CLI commands (Phase 12-13) give operators basic job visibility. A production-useful observability upgrade was originally planned as Phase 15 caps 6-8 but was recognized as scope creep beyond the MVP debug-first requirement (SRS FR-14). This full observability suite remains Stage 2 scope:
 
+#### Dashboard
 - polished pipeline timeline with visual status icons
-- retry-from-step buttons
+- retry-from-step controls (built on Phase 13 retry/resume engine)
 - artifact browser with download buttons
 - video/audio preview
-- provider latency and cost charts
-- gate decision explanations
-- dashboard notifications
-- approval workflow integration
-- filtered job history
+- thumbnail preview
+- research brief preview
+- script preview
+- provider attempts timeline
+- provider latency and cost summaries
+- gate explanation panels
+- filtered job history with search
 - searchable logs
+- dashboard notifications
+- approval workflow integration hooks
+
+#### CLI Parity
+Commands matching dashboard observability:
+
+```bash
+.venv/bin/python3 -m clipper_agency job-timeline 125
+.venv/bin/python3 -m clipper_agency job-open-artifact 125 --path agents/composer/ffmpeg_stderr.log
+.venv/bin/python3 -m clipper_agency job-export-debug-bundle 125
+```
+
+#### Debug Bundle Export
+Create a zip/tar for support and debugging:
+
+```text
+job metadata
+manifest
+agent inputs/outputs
+gate results
+logs
+research brief
+script
+provider attempts
+ffmpeg logs
+final package metadata
+```
+
+Exclude secrets and large binaries by default unless explicitly requested.
 
 ### Phase 13 Retry/Resume and Cache Reuse
 

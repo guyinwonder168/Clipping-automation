@@ -131,6 +131,26 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 84 | Every gate persists one JSON result and hard-fail gates stop downstream execution | PRD §5 PR-02, SRS §2 FR-01/FR-14, Design §3 |
 | 85 | Agent DB states transition pending → running → completed/failed with timestamps and error details | SRS §3 NFR-07, Design §1 |
 
+### From Phase 13 Retry/Resume + Cache Reuse
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 86 | CLI `job-retry <id> --from <agent>` re-runs from a specified agent; `job-resume <id>` resumes from failed/paused stage. Both use the original config snapshot by default and skip valid cached artifacts via `validate_agent_cache()`. | SRS §2 FR-17, Design §1 |
+| 87 | Dashboard POST `/jobs/<id>/retry` and `/jobs/<id>/resume` routes provide the same write-enabled retry controls with CSRF protection | Design §1 |
+| 88 | Job config snapshot frozen at creation time (`jobs.config_snapshot`); retries/resumes use the same snapshot even if global config changed. Override flag available for explicit re-snapshot. | Design §1 |
+| 89 | `validate_agent_cache()` checks persisted artifacts deterministically (exists, non-zero, valid JSON/format/timing) before skipping a paid provider call. Invalid cache falls through to re-run. | Design §1 |
+
+### From Phase 14 Media/Composer Correctness
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 90 | FFmpeg preflight diagnostic checks `ffmpeg`, `ffprobe`, libx264, aac, mp3 before any render work; fails clearly if missing | SRS §2 FR-18, Design §7 |
+| 91 | Scene normalization: every clip re-encoded to 1080x1920, yuv420p, h264, metadata stripped, duration 1-5s, before concat. Provenance recorded in `provenance.json`. | Design §7 |
+| 92 | Generated card fallback: Visual Director uses Pillow to render 1080x1920 PNG text-on-background cards when no clips or stock footage available | PRD §9, SRS §2 FR-19, Design §7 |
+| 93 | Deterministic video validation (G10): check `video.mp4` exists, >1KB, 9:16, 1080x1920, 20-60s, audio track, h264/aac, metadata stripped — before Reviewer multimodal spend | SRS §2 FR-20, Design §3 G10 |
+| 94 | Output package fixed-contract nomenclature ensures `video.mp4`, not `final.mp4`; packager uses OWASP-safe path sandbox (S6549) | PRD §4, Design §1, Design §13 |
+| 95 | Thumbnail generated as 1080x1920 PNG using Pillow with template-based styling, included in final package as `thumbnail.png` | PRD §4, Design §13 |
+
 ---
 
 ## Requirements Traceability Matrix
@@ -214,6 +234,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | E19a | Downloaded clip < 1 second | Rejected by G9 (flash frame, not usable) | Design §3 G9, Design §7 |
 | E20 | Downloaded file is corrupt or 0 bytes | G9 validates each asset (file size > 0), skips corrupt ones | Design §3 G9 |
 | E21 | No Pexels API key configured | Generated cards only. If no cards: hard-fail. | Design §3 G9 |
+| E21a | Scene normalization fails (wrong resolution/codec after re-encode) | Clip excluded from concat; provenance records failure. If no valid clips remain, G9 handles. | Design §7 |
 
 ### Composer Edge Cases
 
@@ -224,6 +245,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | E24 | Rendered video wrong resolution | G10 hard-fail | Design §3 G10 |
 | E24a | Rendered video is 0 bytes | G10 hard-fail (file size > 1KB check) | Design §3 G10 |
 | E25 | Rendered video too long/short | G10 checks 20-60s range | Design §3 G10 |
+| E25a | FFmpeg preflight diagnostic fails (missing ffmpeg, libx264, aac, or mp3) | Pipeline stops before any render work with clear diagnostic message. Admin/Creative Lead must fix system environment. | SRS §2 FR-18, Design §7 |
 
 ### Reviewer Edge Cases
 
