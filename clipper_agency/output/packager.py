@@ -1,6 +1,7 @@
 """Output Packager — final output assembly with metadata."""
 
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,7 +28,14 @@ class OutputPackager:
         Checks resolution (1080x1920), codec (h264), duration (20-60s),
         and audio track presence.
         """
-        info = probe_video(video_path)
+        # Validate path before probing
+        if not video_path or not isinstance(video_path, str):
+            return ValidationResult(valid=False, message="invalid video path")
+        safe_path = os.path.normpath(video_path)
+        if not safe_path or safe_path in (os.path.sep, "."):
+            return ValidationResult(valid=False, message="invalid video path")
+
+        info = probe_video(safe_path)
         if info is None:
             return ValidationResult(valid=False, message="cannot probe video")
 
