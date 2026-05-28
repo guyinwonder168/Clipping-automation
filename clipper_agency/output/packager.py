@@ -1,7 +1,6 @@
 """Output Packager — final output assembly with metadata."""
 
 import json
-import os
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -10,6 +9,7 @@ from typing import Any
 
 from clipper_agency import __version__
 from clipper_agency.core.media_probe import probe_video
+from clipper_agency.core.safe_paths import resolve_existing_file_under
 
 
 @dataclass
@@ -22,21 +22,21 @@ class ValidationResult:
 class OutputPackager:
     """Packages final video, caption, thumbnail, and metadata into output directory."""
 
-    def _validate_output_media(self, video_path: str) -> ValidationResult:
+    def _validate_output_media(
+        self,
+        video_path: str,
+        allowed_base_dir: str | Path,
+    ) -> ValidationResult:
         """Validate output video meets quality requirements.
 
         Checks resolution (1080x1920), codec (h264), duration (20-60s),
         and audio track presence.
         """
-        # Validate path before probing
-        if not video_path or not isinstance(video_path, str):
-            return ValidationResult(valid=False, message="invalid video path")
-        safe_path = os.path.abspath(video_path)
-        # Required boundary check before probing a dynamic Composer output path.
-        if not os.path.isfile(safe_path):  # NOSONAR - validated before ffprobe wrapper use
+        safe_path = resolve_existing_file_under(allowed_base_dir, video_path)
+        if safe_path is None:
             return ValidationResult(valid=False, message="invalid video path")
 
-        info = probe_video(safe_path)
+        info = probe_video(safe_path, allowed_base_dir)
         if info is None:
             return ValidationResult(valid=False, message="cannot probe video")
 
@@ -82,21 +82,27 @@ class OutputPackager:
             meta_file = out / "metadata.json"
 
             # Copy video unless composer already wrote the final path.
-            source_video = Path(video_path) if video_path else None
-            if source_video and source_video.exists():
-                validation = self._validate_output_media(str(source_video))
-                if not validation.valid:
-                    return {
-                        "status": "failed",
-                        "error": validation.message,
-                        "output_dir": str(out),
-                    }
-                if source_video.resolve() != final_video.resolve():
-                    shutil.copy2(source_video, final_video)
-            else:
+            source_video = (
+                resolve_existing_file_under(out, video_path)
+                if video_path else None
+            )
+            if source_video is None:
                 return {
                     "status": "failed",
-                    "error": f"Video source not found: {video_path}",
+                    "error": (
+                        "Video source not found or outside job output directory: "
+                        f"{video_path}"
+                    ),
+                    "output_dir": str(out),
+                }
+            if source_video != final_video.resolve():
+                shutil.copy2(source_video, final_video)
+
+            validation = self._validate_output_media(str(final_video), out)
+            if not validation.valid:
+                return {
+                    "status": "failed",
+                    "error": validation.message,
                     "output_dir": str(out),
                 }
 

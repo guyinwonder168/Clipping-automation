@@ -217,7 +217,7 @@ class GateVideoValidation(BaseGate):
         if not video_path or not Path(video_path).exists():
             return GateResult(False, "hard_fail", "Video file missing")
 
-        info = probe_video(video_path)
+        info = probe_video(video_path, Path(video_path).parent)
         if info is None:
             return GateResult(
                 False, "hard_fail",

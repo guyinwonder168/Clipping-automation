@@ -2,6 +2,7 @@
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ def card_to_video(png_path: str, output_mp4: str, duration: int = 5) -> CardVide
     width = height = None
     try:
         from clipper_agency.core.media_probe import probe_video
-        info = probe_video(output_mp4)
+        info = probe_video(output_mp4, Path(output_mp4).parent)
         if info:
             width, height = info.width, info.height
     except Exception:

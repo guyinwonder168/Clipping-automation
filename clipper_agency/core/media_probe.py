@@ -1,10 +1,12 @@
 """Media probing utilities — ffprobe-based video metadata extraction."""
 
 import json
-import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from clipper_agency.core.safe_paths import resolve_existing_file_under
 
 
 @dataclass(frozen=True)
@@ -21,19 +23,19 @@ class VideoInfo:
     file_size: int = 0
 
 
-def probe_video(path: str) -> VideoInfo | None:
+def probe_video(
+    path: str | Path,
+    allowed_base_dir: str | Path,
+) -> VideoInfo | None:
     """Probe a video file with ffprobe and return structured metadata.
 
     Returns ``None`` if the file does not exist, ffprobe is unavailable,
     or the JSON output cannot be parsed.
     """
-    # Validate path: guard against traversal and ensure readable file
-    if not path or not isinstance(path, str):
+    resolved_path = resolve_existing_file_under(allowed_base_dir, path)
+    if resolved_path is None:
         return None
-    # Required boundary check before passing a dynamic media path to ffprobe.
-    if not os.path.isfile(path):  # NOSONAR - validated before shell-free subprocess use
-        return None
-    resolved: str = os.path.abspath(path)
+    resolved = str(resolved_path)
 
     try:
         cmd: list[str] = [
@@ -44,7 +46,7 @@ def probe_video(path: str) -> VideoInfo | None:
             "-show_streams",
             resolved,
         ]
-        raw = subprocess.check_output(  # NOSONAR - shell=False and path is an existing file
+        raw = subprocess.check_output(
             cmd,
             stderr=subprocess.DEVNULL,
             shell=False,
@@ -83,7 +85,7 @@ def probe_video(path: str) -> VideoInfo | None:
 
     # --- file size ---
     try:
-        file_size = os.path.getsize(resolved)
+        file_size = resolved_path.stat().st_size
     except OSError:
         file_size = 0
 

@@ -104,7 +104,7 @@ class VisualDirectorAgent(BaseAgent):
             path = asset.get("path", "")
             clip_data: dict[str, Any] = {"source": asset["source"]}
             if path and os.path.isfile(path):
-                info = probe_video(path)
+                info = probe_video(path, Path(path).parent)
                 if info is not None:
                     clip_data.update({
                         "original_width": info.width,

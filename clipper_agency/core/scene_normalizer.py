@@ -2,6 +2,7 @@
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ class SceneNormalizer:
         try:
             from clipper_agency.core.media_probe import probe_video
 
-            info = probe_video(input_path)
+            info = probe_video(input_path, Path(input_path).parent)
             if (
                 info
                 and info.width == self.TARGET_WIDTH
