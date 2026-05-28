@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Job {{ debug.job.id }} Debug — Clipper Agency{% endblock %}
+{% block content %}
+<h1>Job {{ debug.job.id }} Debug</h1>
+
+<h2>Overview</h2>
+<table>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>Topic</td><td>{{ debug.job.topic }}</td></tr>
+    <tr><td>Niche</td><td>{{ debug.job.niche }}</td></tr>
+    <tr><td>Status</td><td>{{ debug.job.status }}</td></tr>
+    <tr><td>Current Stage</td><td>{{ debug.summary.current_stage }}</td></tr>
+    <tr><td>Error</td><td>{{ debug.summary.failure_summary }}</td></tr>
+    <tr><td>Created</td><td>{{ debug.job.created_at }}</td></tr>
+    <tr><td>Updated</td><td>{{ debug.job.updated_at }}</td></tr>
+    <tr><td>Completed</td><td>{{ debug.job.completed_at }}</td></tr>
+</table>
+
+<h2>Pipeline Debug</h2>
+<h3>Agent States</h3>
+<table>
+    <tr><th>Agent</th><th>State</th><th>Started</th><th>Completed</th><th>Error</th></tr>
+    {% for state in debug.agent_states %}
+    <tr>
+        <td>{{ state.agent_name }}</td>
+        <td>{{ state.state }}</td>
+        <td>{{ state.started_at }}</td>
+        <td>{{ state.completed_at }}</td>
+        <td>{{ state.error_message }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h3>Gate Results</h3>
+<ul>
+    {% for gate in debug.gates %}
+    <li>{{ gate.relative_path }} — {{ gate.size }} bytes</li>
+    {% else %}
+    <li>No gate artifacts found.</li>
+    {% endfor %}
+</ul>
+
+<h3>Manifest</h3>
+<p>{{ debug.manifest.path }} — {% if debug.manifest.exists %}found{% else %}missing{% endif %}</p>
+
+<h2>Useful Previews</h2>
+{% for name, preview in debug.previews.items() %}
+<h3>{{ name }}</h3>
+<pre>{{ preview }}</pre>
+{% else %}
+<p>No text previews available.</p>
+{% endfor %}
+
+<h2>Artifact Inventory</h2>
+<table>
+    <tr><th>Path</th><th>Type</th><th>Size</th><th>Binary</th></tr>
+    {% for artifact in debug.artifacts %}
+    <tr>
+        <td>{{ artifact.path }}</td>
+        <td>{{ artifact.type }}</td>
+        <td>{{ artifact.size }}</td>
+        <td>{{ artifact.binary }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No artifacts found.</td></tr>
+    {% endfor %}
+</table>
+{% endblock %}
