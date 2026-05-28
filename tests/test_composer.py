@@ -14,6 +14,7 @@ class TestComposerArtifacts:
     def test_output_video_named_video_mp4(self, tmp_path, mocker):
         """Output video should be video.mp4, not final.mp4."""
         mocker.patch("subprocess.run")
+        mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
         agent = ComposerAgent()
         result = agent.execute(
             job_id=30,
@@ -27,6 +28,7 @@ class TestComposerArtifacts:
 
     def test_persists_input_json(self, tmp_path, mocker):
         mocker.patch("subprocess.run")
+        mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
         agent = ComposerAgent()
         agent.execute(
             job_id=31,
@@ -45,6 +47,7 @@ class TestComposerArtifacts:
 
     def test_persists_ffmpeg_command(self, tmp_path, mocker):
         mock_run = mocker.patch("subprocess.run")
+        mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
         agent = ComposerAgent()
         agent.execute(
             job_id=32,
@@ -62,6 +65,7 @@ class TestComposerArtifacts:
 
     def test_persists_output_json(self, tmp_path, mocker):
         mocker.patch("subprocess.run")
+        mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
         agent = ComposerAgent()
         agent.execute(
             job_id=33,
@@ -80,11 +84,26 @@ class TestComposerArtifacts:
     def test_ffmpeg_stderr_log_on_failure(self, tmp_path, mocker):
         """When ffmpeg fails, stderr should be persisted."""
         import subprocess
+
         err = subprocess.CalledProcessError(
             1, "ffmpeg",
             stderr=b"File not found: invalid input\n",
         )
+        # Preflight must pass; actual ffmpeg compose fails
+        mock_result = mocker.MagicMock()
+        mock_result.ffmpeg_found = True
+        mock_result.ffprobe_found = True
+        mock_result.libx264_available = True
+        mock_result.aac_available = True
+        mock_result.mp3_decode_available = True
+        mock_result.all_ok.return_value = True
+        mocker.patch(
+            "clipper_agency.core.ffmpeg_preflight.FFmpegPreflight.probe",
+            return_value=mock_result,
+        )
+        mocker.patch("dataclasses.asdict", return_value={"ffmpeg_found": True})
         mocker.patch("subprocess.run", side_effect=err)
+        mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
         agent = ComposerAgent()
         agent.execute(
             job_id=34,
@@ -105,6 +124,7 @@ class TestComposerOutputNaming:
 
     def test_video_path_includes_job_id(self, mocker):
         mocker.patch("subprocess.run")
+        mocker.patch("subprocess.check_output", return_value=b"libx264\naac\nmp3")
         agent = ComposerAgent()
         result = agent.execute(
             job_id=35,
