@@ -51,6 +51,47 @@
 <p>No text previews available.</p>
 {% endfor %}
 
+<h2>Actions</h2>
+{% if debug.job.status in ("FAILED", "PAUSED") %}
+<p>
+    <button onclick="retryJob('{{ debug.job.id }}')">Retry from agent…</button>
+    <button onclick="resumeJob('{{ debug.job.id }}')">Resume</button>
+    <span id="action-status"></span>
+</p>
+{% else %}
+<p>No actions available for {{ debug.job.status }} jobs.</p>
+{% endif %}
+
+<script>
+function retryJob(jobId) {
+    const agent = prompt("Retry from which agent?");
+    if (!agent) return;
+    const useCache = confirm("Use cached artifacts where valid?");
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute("content");
+    const el = document.getElementById("action-status");
+    el.textContent = "Retrying…";
+    fetch("/jobs/" + jobId + "/retry", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": csrfToken},
+        body: JSON.stringify({from_agent: agent, use_cache: useCache})
+    }).then(r => r.json()).then(data => {
+        el.textContent = data.status === "completed" ? "✓ Retry completed" : "✗ " + (data.error || JSON.stringify(data));
+    }).catch(e => { el.textContent = "✗ Request failed"; });
+}
+function resumeJob(jobId) {
+    if (!confirm("Resume this job from the failed agent?")) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute("content");
+    const el = document.getElementById("action-status");
+    el.textContent = "Resuming…";
+    fetch("/jobs/" + jobId + "/resume", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": csrfToken}
+    }).then(r => r.json()).then(data => {
+        el.textContent = data.status === "completed" ? "✓ Resume completed" : "✗ " + (data.error || JSON.stringify(data));
+    }).catch(e => { el.textContent = "✗ Request failed"; });
+}
+</script>
+
 <h2>Artifact Inventory</h2>
 <table>
     <tr><th>Path</th><th>Type</th><th>Size</th><th>Binary</th></tr>

@@ -1,5 +1,6 @@
 """Clipper Agency — automated short-form video content production."""
 
+import json
 import os
 
 import click
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 from clipper_agency import __version__
 from clipper_agency.config.loader import load_settings
 from clipper_agency.core.logging import setup_logging, get_logger
+from clipper_agency.db.queries import PIPELINE_ORDER
 from clipper_agency.orchestrator.engine import Orchestrator
 
 # Load .env into os.environ before any service reads env vars.
@@ -240,6 +242,133 @@ def job_artifacts(job_id: int) -> None:
         )
     if not debug["artifacts"]:
         click.echo(_NONE)
+
+
+# ── Phase 13: job-retry / job-resume ────────────────────────────────
+
+_RETRY_AGENTS = click.Choice(PIPELINE_ORDER)
+
+
+@cli.command("job-retry")
+@click.argument("job_id", type=int)
+@click.option("--from", "from_agent", type=_RETRY_AGENTS, required=True,
+              help="Agent to retry from (resets this agent + downstream)")
+@click.option("--use-cache", is_flag=True, default=False,
+              help="Reuse cached artifacts when available")
+def job_retry(job_id: int, from_agent: str, use_cache: bool) -> None:
+    """Retry a FAILED job from a specific agent.
+
+    Resets the target agent and all downstream agents to pending.
+    Earlier successful agent outputs are preserved.
+
+    \b
+    Examples:
+      python -m clipper_agency job-retry 125 --from composer
+      python -m clipper_agency job-retry 125 --from voice_producer --use-cache
+    """
+    from clipper_agency.db.connection import get_connection
+    from clipper_agency.db.queries import (
+        append_audit_log, get_job, reset_agents_from,
+    )
+
+    conn = get_connection(_db_path())
+    job = get_job(conn, job_id)
+    if not job:
+        raise click.ClickException(f"Job not found: {job_id}")
+    if job["status"] != "FAILED":
+        raise click.ClickException(
+            f"Job #{job_id} is {job['status']}, not FAILED. Only FAILED jobs can be retried."
+        )
+
+    cache_flag = " --use-cache" if use_cache else ""
+    reset_names = reset_agents_from(conn, job_id, from_agent)
+    append_audit_log(
+        conn, action="job_retry", actor="cli",
+        resource_type="job", resource_id=job_id,
+        details=json.dumps({"from_agent": from_agent, "use_cache": use_cache,
+                             "reset_agents": reset_names}),
+    )
+
+    click.echo(f"Job #{job_id}: reset agents {reset_names} to pending.")
+    click.echo(f"  Retry from: {from_agent}{cache_flag}")
+
+    # Execute the pipeline from the target agent
+    orch = Orchestrator(db_path=_db_path())
+    result = orch.run_pipeline_from(job_id, from_agent=from_agent,
+                                    use_cache=use_cache)
+
+    if result.get("status") == "completed":
+        click.echo(f"\N{check mark} Retry completed! Job #{job_id}")
+    else:
+        reason = result.get("reason") or result.get("error") or "Unknown"
+        click.echo(f"\N{cross mark} Retry failed: {reason}")
+
+
+@cli.command("job-resume")
+@click.argument("job_id", type=int)
+def job_resume(job_id: int) -> None:
+    """Resume a FAILED or PAUSED job from the failed/paused agent.
+
+    For FAILED jobs: resets the failed agent and downstream to pending.
+    For PAUSED jobs: resets the paused agent and downstream to pending.
+
+    \b
+    Examples:
+      python -m clipper_agency job-resume 125
+    """
+    from clipper_agency.db.connection import get_connection
+    from clipper_agency.db.queries import (
+        append_audit_log, get_agent_state, get_job, reset_agents_from,
+    )
+
+    conn = get_connection(_db_path())
+    job = get_job(conn, job_id)
+    if not job:
+        raise click.ClickException(f"Job not found: {job_id}")
+    if job["status"] not in ("FAILED", "PAUSED"):
+        raise click.ClickException(
+            f"Job #{job_id} is {job['status']}. Only FAILED or PAUSED jobs can be resumed."
+        )
+
+    # Find the failed or first pending agent
+    target_agent = None
+    for name in PIPELINE_ORDER:
+        state = get_agent_state(conn, job_id, name)
+        if not state:
+            continue
+        if state["state"] == "failed":
+            target_agent = name
+            break
+        if state["state"] == "pending" and job["status"] == "PAUSED":
+            target_agent = name
+            break
+
+    if not target_agent:
+        raise click.ClickException(
+            f"Could not determine resume point for job #{job_id}. "
+            f"Use job-retry --from <agent> to specify."
+        )
+
+    reset_names = reset_agents_from(conn, job_id, target_agent)
+    append_audit_log(
+        conn, action="job_resume", actor="cli",
+        resource_type="job", resource_id=job_id,
+        details=json.dumps({"from_agent": target_agent, "reset_agents": reset_names}),
+    )
+
+    click.echo(f"Job #{job_id}: resumed from {target_agent}.")
+    click.echo(f"  Reset agents: {reset_names}")
+
+    # Execute the pipeline from the resume point
+    orch = Orchestrator(db_path=_db_path())
+    result = orch.run_pipeline_from(job_id, from_agent=target_agent,
+                                    use_cache=True)
+
+    if result.get("status") == "completed":
+        click.echo(f"\N{check mark} Resume completed! Job #{job_id}")
+    else:
+        reason = result.get("reason") or result.get("error") or "Unknown"
+        click.echo(f"\N{cross mark} Resume failed: {reason}")
 
 
 # ── test-agent subcommand ──────────────────────────────────────────────────

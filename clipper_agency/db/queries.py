@@ -4,6 +4,12 @@ import json
 import sqlite3
 from typing import Any
 
+# Pipeline agent order — used for retry/resume reset logic.
+PIPELINE_ORDER = [
+    "safety", "researcher", "scriptwriter",
+    "voice_producer", "visual_director", "composer", "reviewer",
+]
+
 
 def create_job(conn: sqlite3.Connection, topic: str, niche: str,
                account_id: int | None = None, template: str | None = None,
@@ -117,3 +123,45 @@ def mark_agent_failed(conn: sqlite3.Connection, job_id: int,
     update_agent_state(conn, job_id, agent_name, "failed",
                        output_data=output_data,
                        error_message=error_message)
+
+
+def append_audit_log(conn: sqlite3.Connection, action: str,
+                     actor: str | None = None,
+                     resource_type: str | None = None,
+                     resource_id: int | None = None,
+                     details: str | None = None) -> None:
+    """Insert a row into the audit_log table."""
+    conn.execute(
+        """INSERT INTO audit_log (action, actor, resource_type, resource_id, details)
+           VALUES (?, ?, ?, ?, ?)""",
+        (action, actor, resource_type, resource_id, details),
+    )
+    conn.commit()
+
+
+def reset_agents_from(conn: sqlite3.Connection, job_id: int,
+                      from_agent: str) -> list[str]:
+    """Reset target agent and all downstream agents to pending.
+
+    Clears completed_at and error_message for reset agents.
+    Returns the list of agent names that were reset.
+
+    Raises ValueError if from_agent is not a known pipeline agent.
+    """
+    if from_agent not in PIPELINE_ORDER:
+        raise ValueError(f"Unknown agent: {from_agent}")
+
+    start_idx = PIPELINE_ORDER.index(from_agent)
+    reset_names = PIPELINE_ORDER[start_idx:]
+
+    for name in reset_names:
+        conn.execute(
+            """UPDATE agent_states
+               SET state = 'pending',
+                   error_message = NULL,
+                   completed_at = NULL
+               WHERE job_id = ? AND agent_name = ?""",
+            (job_id, name),
+        )
+    conn.commit()
+    return reset_names

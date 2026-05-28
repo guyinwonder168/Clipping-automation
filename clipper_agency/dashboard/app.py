@@ -10,8 +10,9 @@ from clipper_agency.config.loader import load_settings
 from clipper_agency.core.job_debug import collect_job_debug, summarize_jobs
 from clipper_agency.dashboard.auth import requires_auth
 from clipper_agency.db.connection import get_connection
-from clipper_agency.db.queries import get_job, list_jobs
+from clipper_agency.db.queries import PIPELINE_ORDER, get_agent_state, get_job, list_jobs
 from clipper_agency.db.schema import initialize_schema
+from clipper_agency.orchestrator.engine import Orchestrator
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = os.getenv("DASHBOARD_SECRET_KEY")
@@ -24,7 +25,9 @@ def require_csrf_secret():
         abort(403)
 
 
-CSRFProtect(app)
+csrf = CSRFProtect(app)
+
+_JOB_NOT_FOUND = "Job not found"
 
 
 @app.errorhandler(CSRFError)
@@ -84,7 +87,7 @@ def api_job_detail(job_id: int):
     conn = _get_db()
     job = get_job(conn, job_id)
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
     return jsonify(dict(job))
 
 
@@ -96,7 +99,7 @@ def api_job_debug(job_id: int):
     conn = _get_db()
     debug = collect_job_debug(conn, job_id, settings.assets_cache, settings.output_dir)
     if not debug:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
     return jsonify(debug)
 
 
@@ -117,6 +120,56 @@ def api_create_job():
         niche=data.get("niche", "indonesian_artists"),
         output_dir=str(settings.output_dir),
     )
+    return jsonify(result)
+
+
+@app.route("/jobs/<int:job_id>/retry", methods=["POST"])
+@requires_auth
+def retry_job(job_id: int):
+    """Retry a job from a specified agent.
+
+    Expects JSON body with ``from_agent`` (required) and ``use_cache`` (optional).
+    """
+    data = request.get_json(silent=True) or {}
+    from_agent = data.get("from_agent")
+    if not from_agent:
+        return jsonify({"error": "from_agent is required"}), 400
+
+    settings = load_settings()
+    conn = _get_db()
+    job = get_job(conn, job_id)
+    if not job:
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
+
+    use_cache = data.get("use_cache", False)
+    orch = Orchestrator(db_path=str(settings.db_path))
+    result = orch.run_pipeline_from(job_id, from_agent=from_agent, use_cache=use_cache)
+    return jsonify(result)
+
+
+@app.route("/jobs/<int:job_id>/resume", methods=["POST"])
+@requires_auth
+def resume_job(job_id: int):
+    """Resume a FAILED or PAUSED job from the failed/paused agent."""
+    settings = load_settings()
+    conn = _get_db()
+    job = get_job(conn, job_id)
+    if not job:
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
+
+    # Find the failed agent to determine resume point
+    target_agent = None
+    for name in PIPELINE_ORDER:
+        state = get_agent_state(conn, job_id, name)
+        if state and state["state"] == "failed":
+            target_agent = name
+            break
+
+    if not target_agent:
+        return jsonify({"error": "Could not determine resume point"}), 400
+
+    orch = Orchestrator(db_path=str(settings.db_path))
+    result = orch.run_pipeline_from(job_id, from_agent=target_agent, use_cache=True)
     return jsonify(result)
 
 
