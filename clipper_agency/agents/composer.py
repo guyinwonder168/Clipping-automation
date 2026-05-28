@@ -1,19 +1,26 @@
 """Composer Agent — FFmpeg-based video assembly and thumbnail generation."""
 
 import dataclasses
+import json
 import logging
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.core.artifacts import write_json
+from clipper_agency.core.card_generator import CardGenerator, CardType
+from clipper_agency.core.card_to_video import card_to_video
 from clipper_agency.core.ffmpeg_preflight import FFmpegPreflight
 from clipper_agency.core.paths import (
     agent_input_file,
     agent_output_file,
     ensure_agent_dir,
 )
+from clipper_agency.core.scene_normalizer import SceneNormalizer
+from clipper_agency.core.scene_validator import SceneValidator
 
 logger = logging.getLogger(__name__)
 
@@ -96,21 +103,28 @@ class ComposerAgent(BaseAgent):
         thumbnail_path = f"{output_dir}/job_{job_id}/thumbnail.png"
 
         try:
-            ffmpeg_cmd = self._assemble_video(video_assets, voice_files, video_path)
+            assemble_result = self._assemble_video(
+                video_assets, voice_files, video_path,
+            )
+            ffmpeg_cmd = assemble_result["cmd"]
+            card_fallback_scenes = assemble_result.get(
+                "card_fallback_scenes", [],
+            )
             self._generate_thumbnail(video_path, thumbnail_path)
 
             if agent_dir:
                 self._persist_diagnostics(agent_dir, ffmpeg_cmd, "")
 
             logger.info(
-                "Composer: completed — video=%s thumbnail=%s",
-                video_path, thumbnail_path,
+                "Composer: completed — video=%s thumbnail=%s cards=%d",
+                video_path, thumbnail_path, len(card_fallback_scenes),
             )
 
             output = {
                 "status": "completed",
                 "video_path": video_path,
                 "thumbnail_path": thumbnail_path,
+                "card_fallback_scenes": card_fallback_scenes,
             }
             if agent_dir:
                 write_json(agent_output_file(assets_cache, job_id, "composer"),
@@ -165,13 +179,14 @@ class ComposerAgent(BaseAgent):
             f"{concat_inputs}concat=n={num_videos}:v=1[outv]"
         )
 
-        # Build amix filter for audio streams
+        # Build amix filter for audio streams — voice files only (no bg music)
         if audio_files:
             audio_inputs = "".join(
                 f"[{num_videos + i}:a]" for i in range(len(audio_files))
             )
             concat_filter += (
-                f";{audio_inputs}amix=inputs={len(audio_files)}:duration=first[outa]"
+                f";{audio_inputs}"
+                f"amix=inputs={len(audio_files)}:duration=first[outa]"
             )
         else:
             concat_filter += ";anullsrc[outa]"
@@ -180,33 +195,131 @@ class ComposerAgent(BaseAgent):
 
     def _assemble_video(
         self, assets: list[dict], audio_files: list[str], output_path: str
-    ) -> list[str]:
-        video_inputs = [a for a in assets if a.get("path")]
-        if not video_inputs:
-            return []
+    ) -> dict[str, Any]:
+        """Assemble final video from assets with scene normalization and card fallback.
 
-        cmd = ["ffmpeg", "-y"]
-        for v in video_inputs:
-            cmd.extend(["-i", v["path"]])
-        for af in audio_files:
-            cmd.extend(["-i", af])
+        Pipeline:
+        1. Validate each scene file
+        2. Valid scenes → normalize to 1080×1920
+        3. Invalid/missing scenes → generate card → convert to 5 s video
+        4. Concat all normalized scenes + mix audio
+        5. Write ``card_fallback.json`` metadata tracking which scenes used cards.
+        """
+        temp_dir = Path(tempfile.mkdtemp(prefix="composer_"))
+        normalized_scene_paths: list[str] = []
+        card_fallback_scenes: list[int] = []
 
-        filter_graph = self._build_filter(assets, audio_files)
-        cmd.extend([
-            "-filter_complex", filter_graph,
-            "-map", "[outv]",
-            "-map", "[outa]",
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-shortest",
-            output_path,
-        ])
+        try:
+            normalizer = SceneNormalizer()
+            card_gen = CardGenerator()
 
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-        return cmd
+            for i, asset in enumerate(assets):
+                scene_path = asset.get("path", "")
+                scene_num = int(asset.get("scene", i + 1))
+
+                validation = SceneValidator.validate(scene_path)
+
+                if validation.valid:
+                    # ── Normalize existing valid scene ──
+                    norm_path = temp_dir / f"scene_{scene_num}_norm.mp4"
+                    result = normalizer.normalize(
+                        scene_path, str(norm_path),
+                    )
+                    if result.success:
+                        normalized_scene_paths.append(str(norm_path))
+                    else:
+                        # Normalize failed → fall back to card
+                        logger.warning(
+                            "Composer: normalize failed scene %d — "
+                            "using card fallback: %s",
+                            scene_num, result.error,
+                        )
+                        card_fallback_scenes.append(scene_num)
+                        card_mp4 = temp_dir / f"scene_{scene_num}_card.mp4"
+                        card_png = temp_dir / f"card_{scene_num}.png"
+                        card_gen.generate(
+                            CardType.CONTEXT, f"Scene {scene_num}",
+                            str(card_png),
+                        )
+                        ctv = card_to_video(
+                            str(card_png), str(card_mp4), duration=5,
+                        )
+                        if ctv.success:
+                            normalized_scene_paths.append(str(card_mp4))
+                        else:
+                            logger.error(
+                                "Composer: card_to_video failed scene %d: %s",
+                                scene_num, ctv.error,
+                            )
+                else:
+                    # ── Generate card fallback for missing/invalid scene ──
+                    card_fallback_scenes.append(scene_num)
+                    logger.info(
+                        "Composer: scene %d invalid (%s) — "
+                        "generating card fallback",
+                        scene_num, "; ".join(validation.issues[:2]),
+                    )
+                    card_mp4 = temp_dir / f"scene_{scene_num}_card.mp4"
+                    card_png = temp_dir / f"card_{scene_num}.png"
+                    card_gen.generate(
+                        CardType.CONTEXT, f"Scene {scene_num}",
+                        str(card_png),
+                    )
+                    ctv = card_to_video(
+                        str(card_png), str(card_mp4), duration=5,
+                    )
+                    if ctv.success:
+                        normalized_scene_paths.append(str(card_mp4))
+                    else:
+                        logger.error(
+                            "Composer: card_to_video failed scene %d: %s",
+                            scene_num, ctv.error,
+                        )
+
+            # ── Filter out empty entries (scenes where card gen failed) ──
+            valid_normalized = [p for p in normalized_scene_paths if p]
+            if not valid_normalized:
+                logger.warning("Composer: no valid scenes to assemble")
+                return {"cmd": [], "card_fallback_scenes": card_fallback_scenes}
+
+            # Build normalized asset list for filter graph
+            normalized_assets = [
+                {"scene": i + 1, "path": p}
+                for i, p in enumerate(normalized_scene_paths) if p
+            ]
+
+            cmd = ["ffmpeg", "-y"]
+            for n in valid_normalized:
+                cmd.extend(["-i", n])
+            for af in audio_files:
+                cmd.extend(["-i", af])
+
+            filter_graph = self._build_filter(
+                normalized_assets, audio_files,
+            )
+            cmd.extend([
+                "-filter_complex", filter_graph,
+                "-map", "[outv]",
+                "-map", "[outa]",
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-shortest",
+                output_path,
+            ])
+
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+            # ── Persist card fallback metadata ──
+            output_dir = Path(output_path).parent
+            metadata = {"card_fallback_scenes": card_fallback_scenes}
+            (output_dir / "card_fallback.json").write_text(json.dumps(metadata))
+
+            return {"cmd": cmd, "card_fallback_scenes": card_fallback_scenes}
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     def _generate_thumbnail(self, video_path: str, thumbnail_path: str) -> None:
         cmd = [
