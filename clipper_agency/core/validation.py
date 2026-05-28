@@ -160,7 +160,6 @@ def validate_agent_cache(
 
     elif agent_name == "composer":
         video_dir = Path(agent_dir(assets_cache, job_id, "composer"))
-        video_candidates = sorted(str(p) for p in video_dir.glob("*.mp4")) if video_dir.exists() else []
         # composer output.json contains video_path — also validate the actual file
         out_data = read_json(out_p)
         video_path = out_data.get("video_path", "")

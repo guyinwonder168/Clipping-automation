@@ -54,6 +54,7 @@ from clipper_agency.output.packager import OutputPackager
 logger = logging.getLogger(__name__)
 
 _COMPOSER_FAILED = "Composer failed"
+_PACKAGING_FAILED = "Packaging failed"
 
 
 class Orchestrator:
@@ -391,10 +392,10 @@ class Orchestrator:
 
             if pkg_output.get("status") == "failed":
                 update_job_status(conn, job_id, "FAILED",
-                                  pkg_output.get("error", "Packaging failed"))
+                                  pkg_output.get("error", _PACKAGING_FAILED))
                 return {
                     "status": "failed", "failed_at": "packaging",
-                    "reason": pkg_output.get("error", "Packaging failed"),
+                    "reason": pkg_output.get("error", _PACKAGING_FAILED),
                     "job_id": job_id,
                 }
 
@@ -450,6 +451,100 @@ class Orchestrator:
                         agent_name, job_id, "; ".join(vr.issues))
             return {}
         return self._load_agent_output(assets_cache, job_id, agent_name)
+
+    def _run_cached_or_fresh(
+        self, agent_name: str, use_cache: bool, assets_cache: str,
+        job_id: int, run_fn,
+    ) -> dict[str, Any]:
+        """Try cached output when use_cache is True; fall back to fresh run."""
+        if not use_cache:
+            return run_fn()
+        cached = self._try_load_cached(assets_cache, job_id, agent_name)
+        if cached:
+            return cached
+        return run_fn()
+
+    def _retry_composer_stage(
+        self, conn, job_id: int, visual_output: dict[str, Any],
+        voice_output: dict[str, Any], output_dir: str, assets_cache: str,
+    ) -> tuple[dict[str, Any], dict | None]:
+        """Run composer with error handling and G10 gate enforcement.
+
+        Returns (compose_output, abort_response). If abort_response is not
+        None, it should be returned immediately from run_pipeline_from.
+        """
+        mark_agent_running(conn, job_id, "composer")
+        compose_output = self._run_composer(
+            job_id=job_id,
+            assets=visual_output.get("assets", []),
+            audio_files=voice_output.get("audio_files", []),
+            output_dir=output_dir, assets_cache=assets_cache,
+        )
+
+        if compose_output.get("status") == "failed":
+            mark_agent_failed(conn, job_id, "composer",
+                              compose_output.get("error", _COMPOSER_FAILED))
+            update_job_status(
+                conn, job_id, "FAILED",
+                compose_output.get("error", _COMPOSER_FAILED))
+            return compose_output, {
+                "status": "failed", "failed_at": "composer",
+                "reason": compose_output.get("error", _COMPOSER_FAILED),
+                "job_id": job_id,
+            }
+        self._complete_agent(conn, assets_cache, job_id, "composer")
+
+        g10 = GateVideoValidation()
+        g10_result = g10.evaluate(
+            video_path=compose_output.get("video_path"))
+        self._record_gate(assets_cache, job_id,
+                          "G10_video_validation", g10_result)
+        abort = self._enforce_gate(
+            conn, job_id, "G10", g10_result,
+            failed_at="video_validation",
+        )
+        return compose_output, abort
+
+    def _retry_review_and_package(
+        self, conn, job_id: int, topic: str,
+        script_output: dict[str, Any], compose_output: dict[str, Any],
+        safety_rules: list[str], niche: str,
+        output_dir: str, assets_cache: str,
+    ) -> dict | None:
+        """Run review and packaging stages. Returns abort response or None."""
+        mark_agent_running(conn, job_id, "reviewer")
+        self._run_reviewer(
+            job_id=job_id, topic=topic,
+            script=script_output.get("script", []),
+            caption=script_output.get("caption", ""),
+            safety_rules=safety_rules,
+        )
+        self._complete_agent(conn, assets_cache, job_id, "reviewer")
+
+        pkg_output = self._package_output(
+            job_id=job_id,
+            video_path=compose_output.get("video_path", ""),
+            thumbnail_path=compose_output.get("thumbnail_path", ""),
+            caption=script_output.get("caption", ""),
+            topic=topic, niche=niche, output_dir=output_dir,
+        )
+
+        if pkg_output.get("status") == "failed":
+            update_job_status(conn, job_id, "FAILED",
+                              pkg_output.get("error", _PACKAGING_FAILED))
+            return {
+                "status": "failed", "failed_at": "packaging",
+                "reason": pkg_output.get("error", _PACKAGING_FAILED),
+                "job_id": job_id,
+            }
+
+        update_manifest_final(assets_cache, job_id, {
+            "video": pkg_output.get("video_path", ""),
+            "caption": pkg_output.get("caption_path", ""),
+            "thumbnail": pkg_output.get("thumbnail_path", ""),
+            "metadata": pkg_output.get("metadata_path", ""),
+        })
+        return None
 
     def run_pipeline_from(
         self, job_id: int, from_agent: str, use_cache: bool = False,
@@ -539,38 +634,22 @@ class Orchestrator:
 
             # Stage: Content (scriptwriter + voice + gates G6-G8)
             if from_idx <= PIPELINE_ORDER.index("scriptwriter"):
-                if use_cache:
-                    cached = self._try_load_cached(
-                        assets_cache, job_id, "scriptwriter")
-                    if cached:
-                        script_output = cached
-                    else:
-                        script_output = self._run_content_scriptwriter(
-                            conn, job_id, topic, safety_rules,
-                            research_output, assets_cache,
-                        )
-                else:
-                    script_output = self._run_content_scriptwriter(
+                script_output = self._run_cached_or_fresh(
+                    "scriptwriter", use_cache, assets_cache, job_id,
+                    lambda: self._run_content_scriptwriter(
                         conn, job_id, topic, safety_rules,
                         research_output, assets_cache,
-                    )
+                    ),
+                )
 
             if from_idx <= PIPELINE_ORDER.index("voice_producer"):
-                if use_cache:
-                    cached = self._try_load_cached(
-                        assets_cache, job_id, "voice_producer")
-                    if cached:
-                        voice_output = cached
-                    else:
-                        voice_output = self._run_content_voice(
-                            conn, job_id, script_output,
-                            output_dir, assets_cache,
-                        )
-                else:
-                    voice_output = self._run_content_voice(
+                voice_output = self._run_cached_or_fresh(
+                    "voice_producer", use_cache, assets_cache, job_id,
+                    lambda: self._run_content_voice(
                         conn, job_id, script_output,
                         output_dir, assets_cache,
-                    )
+                    ),
+                )
 
             # Stage: Composition (visual + composer + gates G9-G10)
             if from_idx <= PIPELINE_ORDER.index("visual_director"):
@@ -593,36 +672,11 @@ class Orchestrator:
                                      "visual_director")
 
             if from_idx <= PIPELINE_ORDER.index("composer"):
-                mark_agent_running(conn, job_id, "composer")
-                compose_output = self._run_composer(
-                    job_id=job_id,
-                    assets=visual_output.get("assets", []),
-                    audio_files=voice_output.get("audio_files", []),
-                    output_dir=output_dir, assets_cache=assets_cache,
+                compose_output, abort = self._retry_composer_stage(
+                    conn, job_id, visual_output, voice_output,
+                    output_dir, assets_cache,
                 )
-
-                if compose_output.get("status") == "failed":
-                    mark_agent_failed(conn, job_id, "composer",
-                                       compose_output.get("error",
-                                                          _COMPOSER_FAILED))
-                    update_job_status(
-                        conn, job_id, "FAILED",
-                        compose_output.get("error", _COMPOSER_FAILED))
-                    return {"status": "failed", "failed_at": "composer",
-                            "reason": compose_output.get("error",
-                                                          _COMPOSER_FAILED),
-                            "job_id": job_id}
-                self._complete_agent(conn, assets_cache, job_id, "composer")
-
-                g10 = GateVideoValidation()
-                g10_result = g10.evaluate(
-                    video_path=compose_output.get("video_path"))
-                self._record_gate(assets_cache, job_id,
-                                  "G10_video_validation", g10_result)
-                if abort := self._enforce_gate(
-                    conn, job_id, "G10", g10_result,
-                    failed_at="video_validation",
-                ):
+                if abort:
                     return abort
             else:
                 compose_output = self._load_agent_output(
@@ -630,42 +684,15 @@ class Orchestrator:
 
             # Stage: Review + Package
             if from_idx <= PIPELINE_ORDER.index("reviewer"):
-                mark_agent_running(conn, job_id, "reviewer")
-                review_output = self._run_reviewer(
-                    job_id=job_id, topic=topic,
-                    script=script_output.get("script", []),
-                    caption=script_output.get("caption", ""),
-                    safety_rules=safety_rules,
+                abort = self._retry_review_and_package(
+                    conn, job_id, topic, script_output, compose_output,
+                    safety_rules, niche, output_dir, assets_cache,
                 )
-                self._complete_agent(conn, assets_cache, job_id, "reviewer")
-
-                pkg_output = self._package_output(
-                    job_id=job_id,
-                    video_path=compose_output.get("video_path", ""),
-                    thumbnail_path=compose_output.get("thumbnail_path", ""),
-                    caption=script_output.get("caption", ""),
-                    topic=topic, niche=niche, output_dir=output_dir,
-                )
-
-                if pkg_output.get("status") == "failed":
-                    update_job_status(
-                        conn, job_id, "FAILED",
-                        pkg_output.get("error", "Packaging failed"))
-                    return {"status": "failed", "failed_at": "packaging",
-                            "reason": pkg_output.get("error",
-                                                      "Packaging failed"),
-                            "job_id": job_id}
-
-                update_manifest_final(assets_cache, job_id, {
-                    "video": pkg_output.get("video_path", ""),
-                    "caption": pkg_output.get("caption_path", ""),
-                    "thumbnail": pkg_output.get("thumbnail_path", ""),
-                    "metadata": pkg_output.get("metadata_path", ""),
-                })
+                if abort:
+                    return abort
 
             update_job_status(conn, job_id, "COMPLETED")
-            logger.info("Pipeline retry COMPLETED: job #%d from %s",
-                        job_id, from_agent)
+            logger.info("Pipeline retry COMPLETED: job #%d", job_id)
             return {"status": "completed", "job_id": job_id}
 
         except Exception as e:

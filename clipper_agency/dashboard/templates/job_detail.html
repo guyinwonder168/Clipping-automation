@@ -66,7 +66,7 @@
 function retryJob(jobId) {
     const agent = prompt("Retry from which agent?");
     if (!agent) return;
-    const useCache = confirm("Use cached artifacts where valid?") ? true : false;
+    const useCache = confirm("Use cached artifacts where valid?");
     const el = document.getElementById("action-status");
     el.textContent = "Retrying…";
     fetch("/jobs/" + jobId + "/retry", {

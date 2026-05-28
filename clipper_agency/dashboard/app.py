@@ -27,6 +27,8 @@ def require_csrf_secret():
 
 csrf = CSRFProtect(app)
 
+_JOB_NOT_FOUND = "Job not found"
+
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(error: CSRFError):
@@ -85,7 +87,7 @@ def api_job_detail(job_id: int):
     conn = _get_db()
     job = get_job(conn, job_id)
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
     return jsonify(dict(job))
 
 
@@ -97,7 +99,7 @@ def api_job_debug(job_id: int):
     conn = _get_db()
     debug = collect_job_debug(conn, job_id, settings.assets_cache, settings.output_dir)
     if not debug:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
     return jsonify(debug)
 
 
@@ -121,8 +123,8 @@ def api_create_job():
     return jsonify(result)
 
 
-@csrf.exempt
 @app.route("/jobs/<int:job_id>/retry", methods=["POST"])
+@csrf.exempt
 @requires_auth
 def retry_job(job_id: int):
     """Retry a job from a specified agent.
@@ -138,7 +140,7 @@ def retry_job(job_id: int):
     conn = _get_db()
     job = get_job(conn, job_id)
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
 
     use_cache = data.get("use_cache", False)
     orch = Orchestrator(db_path=str(settings.db_path))
@@ -146,8 +148,8 @@ def retry_job(job_id: int):
     return jsonify(result)
 
 
-@csrf.exempt
 @app.route("/jobs/<int:job_id>/resume", methods=["POST"])
+@csrf.exempt
 @requires_auth
 def resume_job(job_id: int):
     """Resume a FAILED or PAUSED job from the failed/paused agent."""
@@ -155,7 +157,7 @@ def resume_job(job_id: int):
     conn = _get_db()
     job = get_job(conn, job_id)
     if not job:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": _JOB_NOT_FOUND}), 404
 
     # Find the failed agent to determine resume point
     target_agent = None
