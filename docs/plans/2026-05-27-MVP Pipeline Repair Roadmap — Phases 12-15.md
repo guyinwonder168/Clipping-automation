@@ -1,6 +1,6 @@
 # MVP Pipeline Repair Roadmap — Phases 12-15
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Phase 12 ✅ Complete (merged `c001685` on master via PR #15).
 
 **Goal:** Repair the MVP pipeline across Phases 12-15 so it matches the PRD/SRS/technical design: restartable job workspaces, persisted agent/gate contracts, retry/resume, correct media composition, template-driven rendering, and useful dashboard/CLI observability.
 

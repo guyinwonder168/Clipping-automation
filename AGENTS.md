@@ -4,8 +4,8 @@ Project-specific instructions for AI agents working in this repository.
 
 ## Repository State
 
-- **Greenfield project** — early implementation phase (Phases 0-11 complete).
-- All 259 tests pass (1 pre-existing `test_full_pipeline_smoke` failure requires FFmpeg + API keys). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI + configurable TTS provider (ElevenLabs/Fish Audio auto-detect).
+- **Greenfield project** — early implementation phase (Phases 0-12 complete).
+- All 322 tests pass (1 pre-existing `test_full_pipeline_smoke` failure requires FFmpeg + API keys). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI + configurable TTS provider (ElevenLabs/Gemini TTS/Fish Audio fallback) + artifact workspace contract + job debug dashboard/CLI + job manifest + gated pipeline hard-fail enforcement + agent state DB transitions.
 
 ## Python Commands
 
@@ -98,6 +98,7 @@ phase/3-services        phase/7-dashboard         phase/11-logging-model-config
 - ❌ NEVER squash or rebase-merge — always use `--merge` (true merge commit).
 - ✅ Always delete the feature branch after successful merge.
 - ✅ Always pull master after deleting branch to stay in sync.
+- ❌ Never over-engineer the code. Always follow the KISS, YAGNI, and DRY principles in every analytical decision.
 
 ## Architecture (MVP)
 
