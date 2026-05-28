@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -12,7 +13,10 @@ from clipper_agency.output.packager import OutputPackager
 class TestPackagerFileCopy:
     """File packaging logic."""
 
-    def test_package_creates_output_directory(self, tmp_path):
+    def test_package_creates_output_directory(self, tmp_path, mocker):
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
         packager = OutputPackager()
         video_path = str(tmp_path / "test.mp4")
         caption_path = str(tmp_path / "caption.txt")
@@ -38,7 +42,10 @@ class TestPackagerFileCopy:
         assert Path(result["caption_path"]).exists()
         assert Path(result["thumbnail_path"]).exists()
 
-    def test_package_writes_metadata_json(self, tmp_path):
+    def test_package_writes_metadata_json(self, tmp_path, mocker):
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
         packager = OutputPackager()
         video_path = str(tmp_path / "test.mp4")
         Path(video_path).write_text("video")
@@ -58,7 +65,10 @@ class TestPackagerFileCopy:
         assert data["topic"] == "K-pop"
         assert data["job_id"] == 2
 
-    def test_package_includes_all_expected_fields(self, tmp_path):
+    def test_package_includes_all_expected_fields(self, tmp_path, mocker):
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
         packager = OutputPackager()
         video_path = str(tmp_path / "test.mp4")
         Path(video_path).write_text("video")
@@ -76,8 +86,11 @@ class TestPackagerFileCopy:
         actual_files = set(os.listdir(str(Path(output_dir) / "job_3")))
         assert expected_files.issubset(actual_files)
 
-    def test_package_skips_copy_when_video_already_final_path(self, tmp_path):
+    def test_package_skips_copy_when_video_already_final_path(self, tmp_path, mocker):
         """Packaging should succeed when composer already wrote video.mp4."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
         packager = OutputPackager()
         output_dir = tmp_path / "output"
         final_video = output_dir / "job_6" / "video.mp4"
@@ -113,6 +126,9 @@ class TestPackagerFileCopy:
 
     def test_package_handles_unexpected_exception(self, tmp_path, mocker):
         """Lines 65-66: unexpected exception during packaging returns failed."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
         mocker.patch("shutil.copy2", side_effect=OSError("disk full"))
         packager = OutputPackager()
         video_path = str(tmp_path / "test.mp4")
@@ -128,3 +144,67 @@ class TestPackagerFileCopy:
         )
         assert result["status"] == "failed"
         assert "disk full" in result["error"]
+
+
+class TestPackageValidation:
+    def test_package_validates_video_resolution(self, tmp_path, mocker):
+        """Rejects video not 1080x1920."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1920, height=1080, codec="h264",
+                                       duration=30.0, has_audio=True))
+
+        packager = OutputPackager()
+        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        assert result.valid is False
+        assert "resolution" in result.message.lower() or "1080" in result.message.lower()
+
+    def test_package_validates_video_duration_too_short(self, tmp_path, mocker):
+        """Rejects video under 20s."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=10.0, has_audio=True))
+
+        packager = OutputPackager()
+        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        assert result.valid is False
+
+    def test_package_validates_video_duration_too_long(self, tmp_path, mocker):
+        """Rejects video over 60s."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=90.0, has_audio=True))
+
+        packager = OutputPackager()
+        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        assert result.valid is False
+
+    def test_package_validates_audio_track_present(self, tmp_path, mocker):
+        """Rejects video without audio."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=False))
+
+        packager = OutputPackager()
+        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        assert result.valid is False
+
+    def test_package_validates_codec(self, tmp_path, mocker):
+        """Rejects non-h264 video."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="vp9",
+                                       duration=30.0, has_audio=True))
+
+        packager = OutputPackager()
+        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        assert result.valid is False
+        assert "codec" in result.message.lower()
+
+    def test_package_accepts_valid_video(self, tmp_path, mocker):
+        """Accepts valid 1080x1920 h264 video with audio, 20-60s."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
+
+        packager = OutputPackager()
+        result = packager._validate_output_media(str(tmp_path / "vid.mp4"))
+        assert result.valid is True
