@@ -25,14 +25,16 @@ class OutputPackager:
             out = Path(output_dir) / f"job_{job_id}"
             out.mkdir(parents=True, exist_ok=True)
 
-            final_video = out / "final.mp4"
+            final_video = out / "video.mp4"
             final_caption = out / "caption.txt"
             final_thumbnail = out / "thumbnail.png"
             meta_file = out / "metadata.json"
 
-            # Copy video
-            if video_path and Path(video_path).exists():
-                shutil.copy2(video_path, final_video)
+            # Copy video unless composer already wrote the final path.
+            source_video = Path(video_path) if video_path else None
+            if source_video and source_video.exists():
+                if source_video.resolve() != final_video.resolve():
+                    shutil.copy2(source_video, final_video)
             else:
                 return {
                     "status": "failed",

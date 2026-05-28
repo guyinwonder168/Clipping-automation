@@ -15,6 +15,8 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+_NONE = "- none"
+
 
 def _print_version(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
     if not value or ctx.resilient_parsing:
@@ -33,6 +35,12 @@ def _output_dir() -> str:
     """Read output directory from settings (env/.env) with fallback."""
     settings = load_settings()
     return str(settings.output_dir)
+
+
+def _assets_cache() -> str:
+    """Read assets cache directory from settings (env/.env) with fallback."""
+    settings = load_settings()
+    return str(settings.assets_cache)
 
 
 def _log_startup_info() -> None:
@@ -119,18 +127,119 @@ def dashboard(host: str, port: int) -> None:
 @cli.command()
 def jobs() -> None:
     """List recent jobs."""
+    from clipper_agency.core.job_debug import summarize_jobs
     from clipper_agency.db.connection import get_connection
     from clipper_agency.db.queries import list_jobs
 
     conn = get_connection(_db_path())
-    for job in list_jobs(conn, limit=10):
+    raw_jobs = list_jobs(conn, limit=10)
+    try:
+        job_rows = summarize_jobs(conn, raw_jobs)
+    except Exception:
+        job_rows = [
+            job | {"current_stage": job.get("status", "unknown"), "failure_summary": job.get("error_message", "")}
+            for job in raw_jobs
+        ]
+    for job in job_rows:
         if job["status"] == "COMPLETED":
             status_icon = "\N{check mark}"
         elif job["status"] == "FAILED":
             status_icon = "\N{cross mark}"
         else:
             status_icon = "\N{hourglass}"
-        click.echo(f"{status_icon} #{job['id']}: {job['topic']} — {job['status']} ({job['created_at']})")
+        updated_at = job.get("updated_at") or job.get("created_at") or "unknown"
+        failure = job.get("failure_summary") or ""
+        failure_text = f" failure={failure}" if failure else ""
+        click.echo(
+            f"{status_icon} #{job['id']}: {job['topic']} — {job['status']} "
+            f"stage={job.get('current_stage', job['status'])} updated={updated_at}{failure_text}"
+        )
+
+
+def _load_job_debug(job_id: int) -> dict:
+    """Load debug payload or raise a ClickException."""
+    from clipper_agency.core.job_debug import collect_job_debug
+    from clipper_agency.db.connection import get_connection
+
+    conn = get_connection(_db_path())
+    debug = collect_job_debug(conn, job_id, _assets_cache(), _output_dir())
+    if not debug:
+        raise click.ClickException(f"Job not found: {job_id}")
+    return debug
+
+
+def _echo_job_summary(debug: dict) -> None:
+    """Print a compact job summary."""
+    job = debug["job"]
+    summary = debug["summary"]
+    click.echo(f"Job #{job['id']}")
+    click.echo(f"Topic: {job['topic']}")
+    click.echo(f"Niche: {job['niche']}")
+    click.echo(f"Status: {job['status']}")
+    click.echo(f"Current Stage: {summary['current_stage']}")
+    click.echo(f"Error: {summary['failure_summary']}")
+    click.echo(f"Created: {job.get('created_at')}")
+    click.echo(f"Updated: {job.get('updated_at')}")
+    click.echo(f"Completed: {job.get('completed_at')}")
+
+
+@cli.command("job-show")
+@click.argument("job_id", type=int)
+def job_show(job_id: int) -> None:
+    """Show one job's DB status and timestamps."""
+    _echo_job_summary(_load_job_debug(job_id))
+
+
+@cli.command("job-debug")
+@click.argument("job_id", type=int)
+def job_debug(job_id: int) -> None:
+    """Show DB state, gate summaries, manifest status, and useful previews."""
+    import json
+
+    debug = _load_job_debug(job_id)
+    _echo_job_summary(debug)
+
+    click.echo("\nAgent States")
+    for state in debug["agent_states"]:
+        click.echo(
+            f"- {state['agent_name']}: {state['state']} "
+            f"started={state.get('started_at')} completed={state.get('completed_at')} "
+            f"error={state.get('error_message') or ''}"
+        )
+
+    click.echo("\nGate Results")
+    for gate in debug["gates"]:
+        click.echo(f"- {gate['relative_path']} ({gate['size']} bytes)")
+    if not debug["gates"]:
+        click.echo(_NONE)
+
+    manifest = debug["manifest"]
+    click.echo(f"\nManifest: {manifest['path']} ({'found' if manifest['exists'] else 'missing'})")
+
+    click.echo("\nUseful Previews")
+    for name, preview in debug["previews"].items():
+        click.echo(f"--- {name} ---")
+        if isinstance(preview, str):
+            click.echo(preview)
+        else:
+            click.echo(json.dumps(preview, indent=2, default=str))
+    if not debug["previews"]:
+        click.echo(_NONE)
+
+
+@cli.command("job-artifacts")
+@click.argument("job_id", type=int)
+def job_artifacts(job_id: int) -> None:
+    """List job artifact files without inlining binary content."""
+    debug = _load_job_debug(job_id)
+    click.echo(f"Artifacts for job #{job_id}")
+    for artifact in debug["artifacts"]:
+        binary = " binary" if artifact["binary"] else ""
+        click.echo(
+            f"- {artifact['path']} type={artifact['type']} size={artifact['size']} bytes{binary}"
+        )
+    if not debug["artifacts"]:
+        click.echo(_NONE)
 
 
 # ── test-agent subcommand ──────────────────────────────────────────────────

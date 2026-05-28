@@ -72,9 +72,30 @@ class TestPackagerFileCopy:
             metadata={"topic": "Test"},
             output_dir=output_dir,
         )
-        expected_files = {"final.mp4", "metadata.json"}
+        expected_files = {"video.mp4", "metadata.json"}
         actual_files = set(os.listdir(str(Path(output_dir) / "job_3")))
         assert expected_files.issubset(actual_files)
+
+    def test_package_skips_copy_when_video_already_final_path(self, tmp_path):
+        """Packaging should succeed when composer already wrote video.mp4."""
+        packager = OutputPackager()
+        output_dir = tmp_path / "output"
+        final_video = output_dir / "job_6" / "video.mp4"
+        final_video.parent.mkdir(parents=True)
+        final_video.write_text("video")
+
+        result = packager.package(
+            job_id=6,
+            video_path=str(final_video),
+            caption_path="",
+            thumbnail_path="",
+            metadata={"topic": "Same file"},
+            output_dir=str(output_dir),
+        )
+
+        assert result["status"] == "completed"
+        assert result["video_path"] == str(final_video)
+        assert final_video.read_text() == "video"
 
     def test_package_handles_missing_source_files(self, tmp_path):
         packager = OutputPackager()

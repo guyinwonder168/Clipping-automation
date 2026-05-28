@@ -7,6 +7,7 @@ from flask_wtf.csrf import CSRFError, CSRFProtect
 
 from clipper_agency import __version__
 from clipper_agency.config.loader import load_settings
+from clipper_agency.core.job_debug import collect_job_debug, summarize_jobs
 from clipper_agency.dashboard.auth import requires_auth
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import get_job, list_jobs
@@ -52,8 +53,20 @@ def index():
 def jobs_page():
     """Jobs listing page."""
     conn = _get_db()
-    jobs = list_jobs(conn, limit=50)
+    jobs = summarize_jobs(conn, list_jobs(conn, limit=50))
     return render_template("jobs.html", jobs=jobs, version=__version__)
+
+
+@app.route("/jobs/<int:job_id>", methods=["GET"])
+@requires_auth
+def job_detail_page(job_id: int):
+    """Render a read-only debug detail page for a job."""
+    settings = load_settings()
+    conn = _get_db()
+    debug = collect_job_debug(conn, job_id, settings.assets_cache, settings.output_dir)
+    if not debug:
+        abort(404)
+    return render_template("job_detail.html", debug=debug, version=__version__)
 
 
 @app.route("/api/jobs", methods=["GET"])
@@ -73,6 +86,18 @@ def api_job_detail(job_id: int):
     if not job:
         return jsonify({"error": "Job not found"}), 404
     return jsonify(dict(job))
+
+
+@app.route("/api/jobs/<int:job_id>/debug", methods=["GET"])
+@requires_auth
+def api_job_debug(job_id: int):
+    """JSON API: get read-only job debug data."""
+    settings = load_settings()
+    conn = _get_db()
+    debug = collect_job_debug(conn, job_id, settings.assets_cache, settings.output_dir)
+    if not debug:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(debug)
 
 
 @app.route("/api/jobs", methods=["POST"])

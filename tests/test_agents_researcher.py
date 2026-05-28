@@ -1,5 +1,6 @@
 """Tests for ResearcherAgent."""
 
+import json
 from unittest.mock import MagicMock
 import pytest
 
@@ -251,3 +252,44 @@ class TestResearcherExecute:
         agent = ResearcherAgent()
         agent.execute(job_id=2, topic="Test", max_results=3, output_dir=str(tmp_path))
         mock_search.assert_called_once_with("Test", 3)
+
+    def test_execute_persists_research_contract_artifacts(self, mocker, tmp_path):
+        mocker.patch(
+            "clipper_agency.services.firecrawl_service.FirecrawlService.search",
+            return_value=self._mock_firecrawl_results(),
+        )
+        mocker.patch(
+            "clipper_agency.services.scrapecreators.ScrapeCreatorsService.search_tiktok_videos",
+            return_value=self._mock_scrapecreators_results(),
+        )
+        mocker.patch(
+            "clipper_agency.llm.client.OpenRouterClient.chat",
+            return_value=self._mock_chat("Research brief: Comprehensive analysis"),
+        )
+        agent = ResearcherAgent()
+
+        result = agent.execute(
+            job_id=125,
+            topic="K-pop trends",
+            output_dir=str(tmp_path / "outputs"),
+            assets_cache=str(tmp_path / "assets"),
+        )
+
+        base = tmp_path / "assets" / "job_125" / "agents" / "researcher"
+        assert (base / "input.json").exists()
+        assert (base / "raw" / "scrapecreators_response.json").exists()
+        assert (base / "raw" / "firecrawl_response.json").exists()
+        assert (base / "research_brief.md").read_text(encoding="utf-8") == (
+            "Research brief: Comprehensive analysis"
+        )
+        contract = json.loads((base / "research_contract.json").read_text(encoding="utf-8"))
+        assert contract["topic"] == "K-pop trends"
+        assert contract["topic_brief_path"] == result["research_brief_path"]
+        assert contract["video_sources"] == self._mock_scrapecreators_results()
+        assert contract["context_sources"] == self._mock_firecrawl_results()
+        assert (base / "normalized" / "video_sources.json").exists()
+        assert (base / "normalized" / "context_sources.json").exists()
+        assert (base / "normalized" / "music_candidates.json").exists()
+        assert (base / "normalized" / "entities.json").exists()
+        assert (base / "normalized" / "risk_flags.json").exists()
+        assert json.loads((base / "output.json").read_text(encoding="utf-8"))["status"] == "completed"

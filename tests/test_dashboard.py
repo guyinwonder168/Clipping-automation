@@ -1,6 +1,7 @@
 """Tests for the web dashboard with basic auth and job listing."""
 
 import base64
+import json
 import os
 import re
 from pathlib import Path
@@ -10,6 +11,10 @@ import pytest
 
 from clipper_agency.dashboard.auth import authenticate, check_auth, requires_auth
 from clipper_agency.dashboard.app import app as dash_app
+from clipper_agency.config.schema import AppSettings
+from clipper_agency.db.connection import get_connection
+from clipper_agency.db.queries import create_agent_state, create_job, mark_agent_failed
+from clipper_agency.db.schema import initialize_schema
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -222,6 +227,8 @@ def test_dashboard_get_routes_declare_http_methods():
     assert '@app.route("/jobs", methods=["GET"])' in source
     assert '@app.route("/api/jobs", methods=["GET"])' in source
     assert '@app.route("/api/jobs/<int:job_id>", methods=["GET"])' in source
+    assert '@app.route("/jobs/<int:job_id>", methods=["GET"])' in source
+    assert '@app.route("/api/jobs/<int:job_id>/debug", methods=["GET"])' in source
 
 
 def test_dashboard_index_uses_async_await():
@@ -255,3 +262,94 @@ def test_api_create_job_passes_settings_to_orchestrator(mock_run, mock_settings,
         niche="indonesian_artists",
         output_dir="test/out",
     )
+
+
+def _create_debug_job(tmp_path):
+    db_path = tmp_path / "clipper.db"
+    assets_cache = tmp_path / "assets" / "cache"
+    output_dir = tmp_path / "outputs"
+    conn = get_connection(db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, "Agnez Mo update", "indonesian_artists")
+    create_agent_state(conn, job_id, "voice_producer")
+    mark_agent_failed(conn, job_id, "voice_producer", "All TTS providers failed")
+
+    job_cache = assets_cache / f"job_{job_id}"
+    (job_cache / "agents" / "researcher").mkdir(parents=True)
+    (job_cache / "agents" / "voice_producer").mkdir(parents=True)
+    (job_cache / "agents" / "composer").mkdir(parents=True)
+    (job_cache / "agents" / "voice_producer" / "voices").mkdir(parents=True)
+    (job_cache / "gates").mkdir(parents=True)
+    (output_dir / f"job_{job_id}").mkdir(parents=True)
+
+    (job_cache / "manifest.json").write_text(json.dumps({"job_id": job_id}), encoding="utf-8")
+    (job_cache / "agents" / "researcher" / "research_brief.md").write_text("# Brief\nUseful context", encoding="utf-8")
+    (job_cache / "agents" / "voice_producer" / "provider_attempts.json").write_text(
+        json.dumps([{"provider": "elevenlabs", "status": "missing_key"}]),
+        encoding="utf-8",
+    )
+    (job_cache / "agents" / "composer" / "ffmpeg_stderr.log").write_text("ffmpeg failed", encoding="utf-8")
+    (job_cache / "gates" / "G8_audio_validation.json").write_text(json.dumps({"passed": False}), encoding="utf-8")
+    (job_cache / "agents" / "voice_producer" / "voices" / "scene_1.mp3").write_bytes(b"binary-audio")
+    return job_id, AppSettings(
+        _env_file=None,
+        db_path=str(db_path),
+        assets_cache=assets_cache,
+        output_dir=output_dir,
+    )
+
+
+def test_jobs_page_includes_debug_summary_fields(client, tmp_path):
+    """Jobs page shows current stage and failure summary fields."""
+    _, settings = _create_debug_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.get("/jobs", headers=_auth_header())
+
+    assert resp.status_code == 200
+    assert "Current Stage" in resp.text
+    assert "Failure" in resp.text
+    assert "voice_producer failed" in resp.text
+    assert "All TTS providers failed" in resp.text
+
+
+def test_job_detail_page_renders_for_existing_job(client, tmp_path):
+    """Job detail page renders debug data for an existing job."""
+    job_id, settings = _create_debug_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.get(f"/jobs/{job_id}", headers=_auth_header())
+
+    assert resp.status_code == 200
+    assert "Pipeline Debug" in resp.text
+    assert "Artifact Inventory" in resp.text
+    assert "research_brief.md" in resp.text
+
+
+def test_job_debug_api_returns_db_and_artifact_inventory(client, tmp_path):
+    """Debug API returns DB rows, manifest, gates, agents, previews, and inventory."""
+    job_id, settings = _create_debug_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        resp = client.get(f"/api/jobs/{job_id}/debug", headers=_auth_header())
+
+    assert resp.status_code == 200
+    payload = resp.json
+    assert payload["job"]["id"] == job_id
+    assert payload["agent_states"][0]["agent_name"] == "voice_producer"
+    assert payload["manifest"]["exists"] is True
+    assert payload["previews"]["research_brief.md"].startswith("# Brief")
+    assert payload["previews"]["provider_attempts.json"][0]["provider"] == "elevenlabs"
+    assert payload["previews"]["ffmpeg_stderr.log"] == "ffmpeg failed"
+    assert any(item["name"] == "G8_audio_validation.json" for item in payload["gates"])
+    binary_items = [item for item in payload["artifacts"] if item["name"] == "scene_1.mp3"]
+    assert binary_items
+    assert "content" not in binary_items[0]
+
+
+def test_job_detail_and_debug_api_return_404_for_missing_job(client, tmp_path):
+    """Missing job detail and debug endpoints return 404."""
+    _, settings = _create_debug_job(tmp_path)
+    with patch("clipper_agency.dashboard.app.load_settings", return_value=settings):
+        page_resp = client.get("/jobs/99999", headers=_auth_header())
+        api_resp = client.get("/api/jobs/99999/debug", headers=_auth_header())
+
+    assert page_resp.status_code == 404
+    assert api_resp.status_code == 404

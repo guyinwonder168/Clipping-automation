@@ -1,9 +1,9 @@
 # Clipper Agency — Software Requirements Specification
 
-**Version:** 2.3
-**Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-11)
-**Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
+**Version:** 2.5
+**Date:** 2026-05-28
+**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
+**Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`, `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
 
 ---
 
@@ -33,7 +33,7 @@
 | FR-03 | Researcher Agent gathers context + source URLs + music candidates via ScrapeCreators + Firecrawl | P0 | MVP |
 | FR-04 | Post-research risk gate: second safety check after real entities/claims/URLs are known | P0 | MVP |
 | FR-05 | Scriptwriter Agent writes script + caption in niche tone, rotates angle from creative history | P0 | MVP |
-| FR-06 | Voice Producer generates voiceover via ElevenLabs only after script passes validation | P0 | MVP |
+| FR-06 | Voice Producer generates voiceover only after script validation using fallback order: ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly | P0 | MVP |
 | FR-07 | Visual Director downloads assets via yt-dlp + Pexels/local fallback, plans scene sequence | P0 | MVP |
 | FR-08 | Composer assembles video via FFmpeg: scenes, transitions, captions, audio mixing, thumbnail | P0 | MVP |
 | FR-09 | Reviewer Agent performs quality + safety + duplicate check (multimodal). Max 2 retries by Admin/Creative Lead | P0 | MVP |
@@ -41,8 +41,8 @@
 | FR-11 | Research cache with Time To Live (TTL): fresh <60min, stale 60-240min, expired >240min or new Asia/Jakarta day | P0 | MVP |
 | FR-12 | Creative memory: pre-generation check prevents repetition; post-generation update records usage | P0 | MVP |
 | FR-13 | Lightweight cost + credit estimate displayed before generation. Blocks job if insufficient credits. | P0 | MVP |
-| FR-14 | All agent states visible in dashboard (idle/running/completed/failed) | P0 | MVP |
-| FR-15 | Asset caching: downloaded clips and Pexels images cached locally to avoid redundant downloads | P0 | MVP |
+| FR-14 | Agent states, timestamps, failure summaries, gate results, and key artifact paths visible through debug-first dashboard/CLI observability | P0 | MVP |
+| FR-15 | Asset/cache layout: intermediate agent/gate artifacts under `ASSETS_CACHE/job_{id}`, final customer package under `OUTPUT_DIR/job_{id}`, with downloaded media cacheable to avoid redundant downloads | P0 | MVP |
 | FR-16 | Research data size guard: ScrapeCreators responses trimmed via `trim=true` + field extraction; researcher LLM input capped at 40K chars to prevent token overflow | P0 | MVP |
 
 ### 2.2 User Interfaces
@@ -78,8 +78,8 @@
 | NFR-04 | LLM cost per video | < $0.01 (Budget East) |
 | NFR-05 | CLI startup | < 2 seconds |
 | NFR-06 | Dashboard page load | < 3 seconds |
-| NFR-07 | All agent state transitions logged with timestamps | Required |
-| NFR-08 | Jobs restartable at any stage (state persisted in DB) | Required |
+| NFR-07 | All agent state transitions persisted with timestamps and observable through DB/dashboard/CLI | Required |
+| NFR-08 | Jobs restartable in principle from persisted DB state plus `ASSETS_CACHE/job_{id}` agent/gate artifacts; write-enabled retry/resume implemented after artifact contract stabilization | Required |
 | NFR-09 | Agent contracts identical at all scales (MVP → 1000+ accounts) | Required |
 | NFR-10 | All external API calls log request parameters, response status, token usage, cost estimate, and latency | Required |
 
@@ -92,7 +92,9 @@
 | Service | Purpose | Auth | Rate/Credits |
 |---------|---------|------|--------------|
 | OpenRouter | LLM access for all agents | API key | Per-model limits |
-| ElevenLabs | Voice generation | API key | Free tier sufficient for MVP; 1 default voice ID |
+| ElevenLabs | Voice generation (primary) | API key | Free tier blocked — Starter plan ($5/mo) required for API access |
+| Google AI Studio Gemini TTS | Voice generation fallback after ElevenLabs | API key (`GEMINI_API_KEY`) | Google AI Studio quota/limits; default voice `GEMINI_TTS_VOICE_NAME=Kore` |
+| Fish Audio | Voice generation fallback after Gemini TTS | API key (`FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY`) | No free tier — Plus plan ($11/mo) required for API access |
 | Pexels API | Stock video/images fallback | API key (free) | 200 requests/hr |
 | yt-dlp | Video/audio download from 1000+ sites | None | Site-specific limits |
 | ScrapeCreators | TikTok video URLs, creator data, song metadata | API key (`x-api-key`) | 75 free credits; `trim=true` + field extraction reduces 1-2MB raw responses to ~500 chars/result |
@@ -107,7 +109,13 @@ Cache → ScrapeCreators (TikTok video/music) + Firecrawl (context/news)
 Stage 2: + Serper. Stage 2+: + DuckDuckGo site-filtered.
 ```
 
-ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagement data, and song metadata. Results cached with TTL to minimize credit burn. Researcher caches ScrapeCreators JSON, Firecrawl results, and research briefs per job output directory.
+**Voice provider fallback:** `ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly`.
+- `ELEVENLABS_API_KEY` set → try `ElevenLabsService` first.
+- If ElevenLabs is missing or fails, `GEMINI_API_KEY` set → try `GeminiTTSService` (`gemini-2.5-flash-preview-tts`, default voice `Kore`).
+- If Gemini TTS is missing or fails, `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` set → try `FishAudioService` (s2-pro model, `/v1/tts` endpoint).
+- If all providers are missing or fail, pipeline stops with a clear error and sanitized attempts are persisted under the job workspace.
+
+ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagement data, and song metadata. Results cached with TTL to minimize credit burn. Researcher preserves raw ScrapeCreators/Firecrawl payloads and normalized research artifacts under `ASSETS_CACHE/job_{id}/agents/researcher/`.
 
 ### 4.3 External Services (Future)
 
@@ -175,6 +183,7 @@ ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagem
 | Prompt versions | Prompt version tracking with diffs | No |
 | Templates | Video template definitions (layout, fonts, colors, animations) | No |
 | Preflight estimates | Lightweight cost estimate before job | No |
+| Job artifact workspace | Per-job intermediate artifacts, agent inputs/outputs, gate results, diagnostics, and manifest under `ASSETS_CACHE/job_{id}` | No |
 | Job snapshots | Full reproducibility data | No |
 
 ### 6.3 Retention Policy
@@ -182,10 +191,10 @@ ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagem
 | Data Type | Duration |
 |-----------|----------|
 | Job metadata, config snapshots, output metadata | Indefinite |
-| Agent inputs/outputs | 180 days |
-| Raw research payloads | 90 days |
-| Heavy intermediate assets | 30 days |
-| Failed render artifacts | 14 days |
+| Agent inputs/outputs, gate results, manifests, diagnostics | 180 days |
+| Raw provider payloads (ScrapeCreators, Firecrawl, TTS attempts metadata) | 90 days |
+| Heavy intermediate assets in `ASSETS_CACHE/job_{id}` | 30 days |
+| Failed render artifacts and FFmpeg diagnostics | 14 days |
 | Final output packages | 365 days |
 
 ### 6.4 Audit Requirements
@@ -218,6 +227,7 @@ ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagem
 | Container | Dockerfile + docker-compose.yml | Same |
 | CLI | `python3 cli.py run --topic "..."`; `python3 -m clipper_agency test-agent <AGENT> [OPTS]`; `--log-level` option | Same + `test-agent` for debugging |
 | Dashboard | Flask/FastAPI + basic auth + 2 groups | Same + full role auth |
+| Voice | ElevenLabs → Gemini TTS → Fish Audio fallback from env vars | Same |
 
 ### Scaling Path
 

@@ -1,5 +1,7 @@
 """Tests for VoiceProducerAgent."""
 
+from unittest import mock
+
 import pytest
 
 from clipper_agency.agents.voice_producer import VoiceProducerAgent
@@ -16,11 +18,11 @@ class TestVoiceProducerName:
 class TestVoiceProducerGenerate:
     """Voice generation with mocked ElevenLabs."""
 
-    def test_execute_generates_voice_files(self, mocker):
-        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
+    def test_execute_generates_voice_files(self, mocker, monkeypatch):
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
-            return_value="/tmp/output/job_1/scene_0.mp3",
+            return_value="/tmp/output/job_1/scene_1.mp3",
         )
         agent = VoiceProducerAgent()
         script = [
@@ -36,12 +38,15 @@ class TestVoiceProducerGenerate:
         assert result["status"] == "completed"
         assert mock_generate.call_count == 2
         assert len(result["audio_files"]) == 2
+        attempts = result.get("attempts", [])
+        assert len(attempts) == 1
+        assert attempts[0]["provider"] == "elevenlabs"
 
-    def test_generate_passes_correct_params(self, mocker):
-        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
+    def test_generate_passes_correct_params(self, mocker, monkeypatch):
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
-            return_value="/tmp/output/job_1/scene_0.mp3",
+            return_value="/tmp/output/job_1/scene_1.mp3",
         )
         agent = VoiceProducerAgent()
         agent.execute(
@@ -53,14 +58,14 @@ class TestVoiceProducerGenerate:
         mock_generate.assert_called_once_with(
             "Hello world",
             "voice123",
-            "/tmp/output/job_1/scene_0.mp3",
+            mock.ANY,
         )
 
-    def test_execute_defaults_voice_id(self, mocker):
-        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
+    def test_execute_defaults_voice_id(self, mocker, monkeypatch):
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
-            return_value="/tmp/output/job_1/scene_0.mp3",
+            return_value="/tmp/output/job_1/scene_1.mp3",
         )
         agent = VoiceProducerAgent()
         result = agent.execute(
@@ -72,8 +77,8 @@ class TestVoiceProducerGenerate:
         call_kwargs = mock_generate.call_args
         assert call_kwargs[0][1] == "21m00Tcm4TlvDq8ikWAM"
 
-    def test_execute_handles_empty_script(self, mocker):
-        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
+    def test_execute_handles_empty_script(self, mocker, monkeypatch):
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
         mock_generate = mocker.patch(
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
         )
@@ -87,8 +92,9 @@ class TestVoiceProducerGenerate:
         assert result["audio_files"] == []
         mock_generate.assert_not_called()
 
-    def test_execute_handles_elevenlabs_failure(self, mocker):
-        mocker.patch.object(VoiceProducerAgent, "_detect_provider", return_value="elevenlabs")
+    def test_execute_handles_elevenlabs_failure(self, mocker, monkeypatch):
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
+
         def failing_generate(text, voice_id, output_path):
             raise Exception("ElevenLabs API error")
 
@@ -96,6 +102,10 @@ class TestVoiceProducerGenerate:
             "clipper_agency.services.elevenlabs.ElevenLabsService.generate_voice",
             side_effect=failing_generate,
         )
+        # Ensure no other keys are present so fallback doesn't kick in
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
+
         agent = VoiceProducerAgent()
         result = agent.execute(
             job_id=1,
@@ -104,4 +114,4 @@ class TestVoiceProducerGenerate:
         )
         assert result["status"] == "failed"
         assert "error" in result
-        assert "ElevenLabs API error" in result["error"]
+        assert "All TTS providers failed" in result["error"]

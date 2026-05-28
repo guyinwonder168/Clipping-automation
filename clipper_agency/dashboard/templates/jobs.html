@@ -3,14 +3,18 @@
 {% block content %}
 <h1>Jobs</h1>
 <table>
-    <tr><th>ID</th><th>Topic</th><th>Niche</th><th>Status</th><th>Created</th></tr>
+    <tr><th>ID</th><th>Topic</th><th>Niche</th><th>Status</th><th>Current Stage</th><th>Failure</th><th>Updated</th><th>Created</th><th>Details</th></tr>
     {% for job in jobs %}
     <tr>
         <td>{{ job.id }}</td>
         <td>{{ job.topic }}</td>
         <td>{{ job.niche }}</td>
         <td class="status-{{ job.status.lower() }}">{{ job.status }}</td>
+        <td>{{ job.current_stage }}</td>
+        <td>{{ job.failure_summary }}</td>
+        <td>{{ job.updated_at }}</td>
         <td>{{ job.created_at }}</td>
+        <td><a href="/jobs/{{ job.id }}">Debug</a></td>
     </tr>
     {% endfor %}
 </table>

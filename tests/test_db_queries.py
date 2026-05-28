@@ -94,3 +94,85 @@ def test_list_jobs_returns_ordered(temp_db_path):
     assert len(jobs) >= 2
     assert jobs[0]["id"] >= jobs[1]["id"]  # Most recent first
     close_connection()
+
+
+# ── Task 11: Agent state transition helpers ──────────────────────
+
+
+def test_mark_agent_running_sets_state_and_timestamps(temp_db_path):
+    """mark_agent_running should set state to running and started_at."""
+    from clipper_agency.db.queries import mark_agent_running
+
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+    create_agent_state(conn, job_id, "safety")
+
+    mark_agent_running(conn, job_id, "safety", input_data='{"topic":"X"}')
+
+    state = get_agent_state(conn, job_id, "safety")
+    assert state["state"] == "running"
+    assert state["started_at"] is not None
+    close_connection()
+
+
+def test_mark_agent_completed_sets_state_and_output(temp_db_path):
+    """mark_agent_completed should set state to completed, output, completed_at."""
+    from clipper_agency.db.queries import mark_agent_completed
+
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+    create_agent_state(conn, job_id, "researcher")
+
+    mark_agent_completed(conn, job_id, "researcher",
+                         output_data='{"status":"completed"}')
+
+    state = get_agent_state(conn, job_id, "researcher")
+    assert state["state"] == "completed"
+    assert state["output_data"] == '{"status":"completed"}'
+    assert state["completed_at"] is not None
+    close_connection()
+
+
+def test_mark_agent_failed_sets_state_and_error(temp_db_path):
+    """mark_agent_failed should set state to failed with error message."""
+    from clipper_agency.db.queries import mark_agent_failed
+
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+    create_agent_state(conn, job_id, "composer")
+
+    mark_agent_failed(conn, job_id, "composer", "FFmpeg not found",
+                      output_data='{"status":"failed"}')
+
+    state = get_agent_state(conn, job_id, "composer")
+    assert state["state"] == "failed"
+    assert state["error_message"] == "FFmpeg not found"
+    assert state["completed_at"] is not None
+    close_connection()
+
+
+def test_agent_state_transitions_in_order(temp_db_path):
+    """Agent should go pending → running → completed in sequence."""
+    from clipper_agency.db.queries import (
+        mark_agent_running, mark_agent_completed,
+    )
+
+    conn = get_connection(temp_db_path)
+    initialize_schema(conn)
+    job_id = create_job(conn, topic="Test", niche="test")
+    create_agent_state(conn, job_id, "safety")
+
+    s1 = get_agent_state(conn, job_id, "safety")
+    assert s1["state"] == "pending"
+
+    mark_agent_running(conn, job_id, "safety")
+    s2 = get_agent_state(conn, job_id, "safety")
+    assert s2["state"] == "running"
+
+    mark_agent_completed(conn, job_id, "safety")
+    s3 = get_agent_state(conn, job_id, "safety")
+    assert s3["state"] == "completed"
+    close_connection()

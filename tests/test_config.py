@@ -37,6 +37,8 @@ def test_app_settings_defaults():
         assert settings.db_path == "data/clipper.db"
         assert str(settings.assets_cache) == "assets/cache"
         assert str(settings.output_dir) == "outputs"
+        assert settings.gemini_api_key == ""
+        assert settings.gemini_tts_voice_name == "Kore"
         assert settings.debug is False
 
 

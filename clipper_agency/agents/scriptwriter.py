@@ -7,6 +7,8 @@ from typing import Any
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
 from clipper_agency.config.loader import load_settings
+from clipper_agency.core.artifacts import write_json, write_text
+from clipper_agency.core.paths import agent_dir, agent_input_file, agent_output_file
 from clipper_agency.llm.client import OpenRouterClient
 
 logger = logging.getLogger(__name__)
@@ -50,11 +52,22 @@ class ScriptwriterAgent(BaseAgent):
         topic: str = "",
         research_brief: str = "",
         safety_rules: list[str] | None = None,
+        assets_cache: str = "",
         **kwargs: Any,
     ) -> dict[str, Any]:
         rules = safety_rules or []
         safety_rules_text = "\n".join(f"- {r}" for r in rules) if rules else "None"
         logger.info("Scriptwriter: brief length=%d", len(research_brief))
+        if assets_cache:
+            write_json(
+                agent_input_file(assets_cache, job_id, self.agent_name),
+                {
+                    "job_id": job_id,
+                    "topic": topic,
+                    "research_brief": research_brief,
+                    "safety_rules": rules,
+                },
+            )
 
         settings = load_settings()
         llm = OpenRouterClient()
@@ -84,13 +97,20 @@ class ScriptwriterAgent(BaseAgent):
             len(parsed["script"]),
             parsed.get("estimated_duration", 0),
         )
-        return {
+        result = {
             "status": "completed",
             "script": parsed["script"],
             "caption": parsed["caption"],
             "hashtags": parsed["hashtags"],
             "estimated_duration": parsed.get("estimated_duration", 0),
         }
+        if assets_cache:
+            base_dir = agent_dir(assets_cache, job_id, self.agent_name)
+            write_json(f"{base_dir}/script.json", result["script"])
+            write_text(f"{base_dir}/caption.txt", result["caption"])
+            write_json(f"{base_dir}/hashtags.json", result["hashtags"])
+            write_json(agent_output_file(assets_cache, job_id, self.agent_name), result)
+        return result
 
     def _parse_script_response(self, content: str) -> dict[str, Any]:
         """Parse the JSON script response from the LLM."""

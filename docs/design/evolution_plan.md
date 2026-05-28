@@ -1,8 +1,8 @@
 # Clipper Agency — Evolution Plan
 
-**Version:** 2.1
-**Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-9)
+**Version:** 2.3
+**Date:** 2026-05-28
+**Status:** MVP Repair In Progress — Future Scope Updated During Phase 12
 
 ---
 
@@ -45,6 +45,43 @@ Manual: user enters post URL + platform + account + posted_at + job_id after upl
 - Actual cost tracking per agent/tool per job
 - Full preflight cost/risk estimator (not just lightweight warning)
 - Creative Director Agent: proposes new angles/templates when variation exhausted
+- Full observability dashboard beyond Phase 12's debug-first internal pages
+
+### Full Observability Dashboard
+
+Phase 12 adds read-only debug-first job pages/API so operators can see where a job failed. The polished production dashboard remains Stage 2+ scope:
+
+- polished pipeline timeline with visual status icons
+- retry-from-step buttons
+- artifact browser with download buttons
+- video/audio preview
+- provider latency and cost charts
+- gate decision explanations
+- dashboard notifications
+- approval workflow integration
+- filtered job history
+- searchable logs
+
+### Phase 13 Retry/Resume and Cache Reuse
+
+Phase 12 intentionally stops at read-only observability: jobs now expose persisted agent states, gate results, manifests, and artifact paths, but operators still cannot mutate a failed job from the debug UI/CLI. Write-enabled retry/resume moves to Phase 13 because it depends on reliable persisted state and reusable artifact contracts.
+
+Planned operator commands:
+
+```text
+python3 -m clipper_agency job-retry 125 --from composer
+python3 -m clipper_agency job-resume 125
+python3 -m clipper_agency job-retry 125 --from voice_producer --use-cache
+```
+
+Prerequisites before enabling retry/resume:
+
+- `agent_states` accurately transitions `pending`/`running`/`completed`/`failed`
+- gate results are persisted and enforce hard-fail stops
+- job config snapshot is stored and reused
+- agent input/output artifacts are persisted
+- paid provider calls can be skipped when valid cached artifacts exist
+- retry policy remains human-triggered only
 
 ### Budget Envelope
 
