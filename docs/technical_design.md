@@ -1,9 +1,9 @@
 # Clipper Agency — Technical Design Document
 
-**Version:** 3.4
-**Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phases 0-11 + Fish Audio TTS)
-**Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`
+**Version:** 3.5
+**Date:** 2026-05-28
+**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
+**Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`, `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
 
 ---
 
@@ -31,10 +31,21 @@ Seven MVP agents, each independently configurable and observable. Orchestrator c
 - **Database-driven state** — each agent reads/writes `JobState` in DB.
 - Orchestrator checks DB to determine "can next agent run?"
 - Every agent state visible in dashboard (idle, running, completed, failed).
-- Jobs restartable at any stage (state persisted).
+- Jobs are restartable in principle from persisted DB state plus `ASSETS_CACHE/job_{id}` artifacts. Write-enabled retry/resume is added after the Phase 12 artifact/debug contract stabilizes.
 - **Manual retry from failed step** — no auto-retry loops in MVP.
 - CLI and dashboard both create the same `jobs` record type.
 - Running jobs cannot be edited or retried until paused, failed, or completed.
+
+### Job Workspace and Final Package Boundaries
+
+Each job has two separate roots:
+
+```text
+ASSETS_CACHE/job_{id}/   # intermediate agent/gate artifacts, diagnostics, manifest
+OUTPUT_DIR/job_{id}/     # final customer-ready package only
+```
+
+`ASSETS_CACHE/job_{id}` contains agent `input.json`/`output.json`, gate result JSON, raw provider payloads, normalized research contracts, TTS provider attempts, FFmpeg diagnostics, and `manifest.json`. `OUTPUT_DIR/job_{id}` contains only `video.mp4`, `caption.txt`, `thumbnail.png`, and `metadata.json`.
 
 ---
 
@@ -58,7 +69,8 @@ Seven MVP agents, each independently configurable and observable. Orchestrator c
 |---------|---------|
 | OpenRouter | LLM for all agents |
 | ElevenLabs | Voice generation |
-| Fish Audio | Voice generation (auto-detected alternative) |
+| Google AI Studio Gemini TTS | Voice generation fallback after ElevenLabs |
+| Fish Audio | Voice generation fallback after Gemini TTS |
 | Pexels API | Stock video/images fallback |
 | yt-dlp | Source video/audio download |
 | ScrapeCreators | TikTok video URL + song metadata |
@@ -101,7 +113,7 @@ Stage 2+:
 9.  Gate G6: Creative Memory Gate
 10. Agent A3: Scriptwriter
 11. Gate G7: Script Validation Gate
-12. Agent A4: Voice Producer (ElevenLabs or Fish Audio, auto-detected)
+12. Agent A4: Voice Producer (ElevenLabs → Gemini TTS → Fish Audio fallback)
 13. Gate G8: Audio Validation Gate
 14. Agent A5: Visual Director (yt-dlp + fallback)
 15. Gate G9: Asset Validation Gate
@@ -272,9 +284,9 @@ FAILED → any earlier state (Admin/Creative Lead triggers retry from that point
 | Agent | Role | Cost Tier | Caching |
 |-------|------|-----------|---------|
 | **Safety Agent** | Pre-checks topic. Ultra-cheap model (GLM-4-9B). Hard-blocks illegal/banned/high-risk defamation; soft-warns unverified claims. | Ultra Budget | Not cached |
-| **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators (`trim=true` + field extraction via `_extract_fields()` handling both `aweme_info`-wrapped and flat trimmed responses, max 20 results) + Firecrawl (lean url/title/desc only). Cache-first: reads `scrapecreators.json`, `firecrawl.json`, `research_brief.json` from job output dir before API calls. Token guard: `MAX_SOURCE_CHARS=40000` prevents LLM overflow. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based + file cache |
+| **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators (`trim=true` + field extraction via `_extract_fields()` handling both `aweme_info`-wrapped and flat trimmed responses, max 20 results) + Firecrawl (lean url/title/desc only). Cache-first: reads/writes raw responses, `research_brief.md`, `research_contract.json`, and normalized files under `ASSETS_CACHE/job_{id}/agents/researcher/`. Token guard: `MAX_SOURCE_CHARS=40000` prevents LLM overflow. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based + job workspace file cache |
 | **Scriptwriter** | Writes script + caption in niche tone. Rotates angle from creative history. Always fresh. | Budget East | Never |
-| **Voice Producer** | Generates voiceover via configured TTS provider (ElevenLabs or Fish Audio, auto-detected). Provider dispatch: `Fish Audio > ElevenLabs > raise error`. `FishAudioService` uses `s2-pro` model, `POST /v1/tts`, `reference_id` for voice model. Audio saved as `assets/voiceovers/{job_id}.mp3`. Always fresh. | API cost | Never |
+| **Voice Producer** | Generates voiceover via provider fallback: ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly. `GeminiTTSService` uses `gemini-2.5-flash-preview-tts` with configured voice (default `Kore`) and wraps PCM audio as WAV when needed. `FishAudioService` uses `s2-pro` model, `POST /v1/tts`, `reference_id` for voice model. Voice files and sanitized `provider_attempts.json` are saved under `ASSETS_CACHE/job_{id}/agents/voice_producer/`. Always fresh. | API cost | Never |
 | **Visual Director** | Selects assets, plans scene sequence. MVP: yt-dlp + Pexels/local fallback. | Budget East | Never |
 | **Composer** | FFmpeg assembly: scenes, transitions, captions, audio mixing, thumbnail. | N/A | Never |
 | **Reviewer** | Quality + safety + duplicate check. Multimodal (video + text). Max 2 human-triggered retries. | Moderate | Never |
@@ -297,13 +309,13 @@ Query construction is config-driven: the niche profile defines search terms, lan
 
 | Agent | Input | Output | On Failure |
 |-------|-------|--------|------------|
-| **Safety** | Topic string, niche safety_rules | Pass/soft-warning/hard-fail + reason | Hard-fail stops pipeline |
-| **Researcher** | Topic, niche config, cached research (if fresh) | Structured output (see YAML below) | Empty result → G5 handles |
-| **Scriptwriter** | Researcher output (topic_brief, context_sources, tags, risk_flags), creative history (used angles) | Script text, caption text, selected angle | N/A (always produces output) |
-| **Voice Producer** | Validated script text, voice_id from config, TTS provider auto-detected from env vars (Fish Audio > ElevenLabs) | Audio file at `assets/voiceovers/{job_id}.mp3`, duration | API failure → stop, retry by Admin/Creative Lead |
-| **Visual Director** | Researcher video_sources, Pexels query from tags, local asset paths, generated card config | Scene plan (ordered list: clip paths, timestamps, overlays), downloaded assets | Download failures → G9 handles |
-| **Composer** | Validated audio file, scene plan, template config, caption text | Rendered video at `outputs/{job_id}.mp4`, thumbnail | FFmpeg failure → stop, retry by Admin/Creative Lead |
-| **Reviewer** | Rendered video file, script text, caption, creative history | Pass/reject + specific issues + recommended retry step | Reject → Admin/Creative Lead decides |
+| **Safety** | Topic string, niche safety_rules; persisted as `agents/safety/input.json` | Pass/soft-warning/hard-fail + reason; persisted as `agents/safety/output.json` + `summary.md` | Hard-fail stops pipeline |
+| **Researcher** | Topic, niche config, cached research (if fresh); persisted as `agents/researcher/input.json` | Markdown brief (`research_brief.md`), raw provider payloads, normalized files, `research_contract.json`, and `output.json` | Empty result → G5 handles |
+| **Scriptwriter** | Researcher contract/output, creative history; persisted as `agents/scriptwriter/input.json` | `script.json`, `caption.txt`, `hashtags.json`, selected angle, and `output.json` | N/A (always produces output) |
+| **Voice Producer** | Validated script text, voice_id from config; persisted as `agents/voice_producer/input.json` | Voice files under `agents/voice_producer/voices/`, `provider_attempts.json`, duration metadata, and `output.json` | All providers fail → stop, retry by Admin/Creative Lead |
+| **Visual Director** | Researcher video_sources, Pexels query from tags, local asset paths, generated card config; persisted as `agents/visual_director/input.json` | `scene_plan.json`, `provenance.json`, scene files under `scenes/`, cards under `cards/`, and `output.json` | Download failures → G9 handles |
+| **Composer** | Validated audio file, scene plan, template config, caption text; persisted as `agents/composer/input.json` | Final `OUTPUT_DIR/job_{id}/video.mp4`, plus `ffmpeg_command.txt`, `ffmpeg_stderr.log`, and `output.json` in job workspace | FFmpeg failure → stop, retry by Admin/Creative Lead |
+| **Reviewer** | Rendered video file, script text, caption, creative history; persisted as `agents/reviewer/input.json` | Pass/reject + specific issues + recommended retry step; persisted as `agents/reviewer/output.json` + `review.md` | Reject → Admin/Creative Lead decides |
 
 #### Researcher Output Schema
 
@@ -357,6 +369,24 @@ researcher_output:
   cache_freshness: "fresh|stale|expired"
 ```
 
+#### Persisted Research Artifacts
+
+The Researcher writes a human-readable brief and a machine-readable contract:
+
+```text
+ASSETS_CACHE/job_{id}/agents/researcher/research_brief.md
+ASSETS_CACHE/job_{id}/agents/researcher/research_contract.json
+ASSETS_CACHE/job_{id}/agents/researcher/raw/scrapecreators_response.json
+ASSETS_CACHE/job_{id}/agents/researcher/raw/firecrawl_response.json
+ASSETS_CACHE/job_{id}/agents/researcher/normalized/video_sources.json
+ASSETS_CACHE/job_{id}/agents/researcher/normalized/context_sources.json
+ASSETS_CACHE/job_{id}/agents/researcher/normalized/music_candidates.json
+ASSETS_CACHE/job_{id}/agents/researcher/normalized/entities.json
+ASSETS_CACHE/job_{id}/agents/researcher/normalized/risk_flags.json
+```
+
+`research_contract.json` is the downstream machine contract consumed by gates, Scriptwriter, and Visual Director. Raw provider responses remain as close to provider payloads as possible; normalized files are derived summaries for deterministic gates and retry/reuse validation.
+
 ---
 
 ## 5. Researcher Cache Policy
@@ -399,9 +429,15 @@ MVP does not automatically extract or embed copyrighted TikTok audio. ScrapeCrea
 
 ### Asset Caching
 
-Downloaded clips (yt-dlp) and stock footage (Pexels) are cached locally by source URL hash:
-- Cache directory: `assets/cache/{url_hash}.{ext}`
+The primary per-job cache is the job workspace:
+- Workspace directory: `ASSETS_CACHE/job_{id}`.
+- Agent/gate artifacts and diagnostics live in that workspace for audit, debug observability, and future retry/resume.
+- Final deliverables are copied/packaged separately under `OUTPUT_DIR/job_{id}`.
+
+Downloaded clips (yt-dlp) and stock footage (Pexels) may also use an optional source URL hash cache to avoid redundant downloads:
+- Global cache pattern: `ASSETS_CACHE/downloads/{url_hash}.{ext}`.
 - Cache checked before any download attempt (saves Pexels API calls and yt-dlp I/O).
+- Reused media is still copied or referenced through the per-job workspace and recorded in provenance.
 - Cache invalidated by source URL change or manual cleanup per retention policy (SRS §6.3).
 
 ### Generated Cards
@@ -485,23 +521,24 @@ Below the agent-default level, the system loads base configuration from `.env` v
 
 - **`AppSettings`** (`pydantic-settings` `BaseSettings`) — typed config class at `clipper_agency/config/schema.py` mapping env vars 1:1 (uppercased) to fields.
 - **`load_dotenv()`** — called once at `clipper_agency/__main__.py` import time, before any service reads `os.getenv()`.
-- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `fish_audio_api_key` (alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
+- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `gemini_api_key`, `gemini_tts_voice_name`, `fish_audio_api_key` (alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
 - **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`. Agents read their model from `load_settings().<agent>_model` instead of hardcoding.
 - **Test isolation:** Tests must use both `AppSettings(_env_file=None)` and `patch.dict(os.environ, {}, clear=True)` to prevent the user's `.env` (loaded by `load_dotenv()` at import) from leaking into test expectations.
-- **Cache path helpers:** `clipper_agency/core/paths.py` provides `job_output_dir()`, `research_cache_dir()`, `scrapecreators_cache_file()`, `firecrawl_cache_file()`, `research_brief_cache_file()` for consistent per-job cache paths.
+- **Cache path helpers:** `clipper_agency/core/paths.py` provides `job_cache_dir()`, `agent_dir()`, `agent_input_file()`, `agent_output_file()`, `gate_result_file()`, `researcher_brief_file()`, `researcher_contract_file()`, `voice_scene_file()`, `visual_scene_file()`, and `job_final_output_dir()` for consistent per-job cache/final paths.
 
-#### Voice Provider Auto-Detection
+#### Voice Provider Fallback
 
-The `VoiceProducerAgent` selects its TTS provider at runtime via `_detect_provider()`:
+The `VoiceProducerAgent` attempts providers in order and records sanitized attempts:
 
 | Priority | Env Var | Service | Model |
 |----------|---------|---------|-------|
-| 1 (highest) | `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` | `FishAudioService` | `s2-pro` via `POST /v1/tts` |
-| 2 | `ELEVENLABS_API_KEY` | `ElevenLabsService` | Configured voice ID |
+| 1 (highest) | `ELEVENLABS_API_KEY` | `ElevenLabsService` | Configured voice ID |
+| 2 | `GEMINI_API_KEY` | `GeminiTTSService` | `gemini-2.5-flash-preview-tts`, default voice `Kore` |
+| 3 | `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` | `FishAudioService` | `s2-pro` via `POST /v1/tts` |
 
-- **Fallback voice IDs** per provider: `fish_audio_voice_id` (env) or `elevenlabs_voice_id` (env).
-- If no provider key is found, the agent raises a clear error and the pipeline stops.
-- Provider-specific `voice_id` field means both providers can be configured simultaneously; switching requires only env var order change.
+- **Fallback voice IDs** per provider: `elevenlabs_voice_id`, `gemini_tts_voice_name`, or `fish_audio_voice_id`.
+- If a provider key is missing or a provider returns an API/HTTP error, the agent tries the next provider.
+- If no provider succeeds, the pipeline stops with a clear error and `provider_attempts.json` records provider name, status, sanitized message, latency, HTTP code, and output path if successful.
 
 ---
 

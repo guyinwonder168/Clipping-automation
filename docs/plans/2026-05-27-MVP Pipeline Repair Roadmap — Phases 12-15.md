@@ -864,7 +864,7 @@ git commit -m "feat: repair composer output package"
 
 ---
 
-## Task 10: Persist Gate Results and Enforce Hard-Fails
+## Task 10: ✅ Persist Gate Results and Enforce Hard-Fails
 
 **Files:**
 - Modify: `clipper_agency/orchestrator/engine.py`
@@ -923,7 +923,7 @@ git commit -m "feat: persist and enforce gate results"
 
 ---
 
-## Task 11: Repair Agent State DB Transitions
+## Task 11: ✅ Repair Agent State DB Transitions
 
 **Files:**
 - Modify: `clipper_agency/db/queries.py`
@@ -987,7 +987,7 @@ git commit -m "feat: track agent state transitions"
 
 ---
 
-## Task 12: Add Job Manifest
+## Task 12: ✅ Add Job Manifest
 
 **Files:**
 - Create or modify: `clipper_agency/core/manifest.py`
@@ -1039,7 +1039,7 @@ git commit -m "feat: add job artifact manifest"
 
 ---
 
-## Task 13: Update Core Requirements Documents
+## Task 13: ✅ Update Core Requirements Documents
 
 **Files:**
 - Modify: `docs/PRD.md`
@@ -1126,7 +1126,7 @@ git commit -m "docs: update artifact workspace and tts fallback requirements"
 
 ---
 
-## Task 14: Add Debug-First Job Observability Dashboard
+## Task 14: ✅ Add Debug-First Job Observability Dashboard
 
 **Files:**
 - Modify: `clipper_agency/dashboard/app.py`
@@ -1230,7 +1230,7 @@ git commit -m "feat: add debug-first job observability dashboard"
 
 ---
 
-## Task 15: Add Debug-First CLI Job Inspection Commands
+## Task 15: ✅ Add Debug-First CLI Job Inspection Commands
 
 **Files:**
 - Modify: `clipper_agency/__main__.py`

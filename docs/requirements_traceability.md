@@ -1,8 +1,8 @@
 # Clipper Agency — Requirements Traceability Matrix
 
-**Version:** 2.4
-**Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phases 0-11 + Fish Audio TTS)
+**Version:** 2.5
+**Date:** 2026-05-28
+**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
 
 ---
 
@@ -31,7 +31,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 9 | Config-swappable niche/language/tone | PRD §3, SRS §2 FR-22 |
 | 10 | 6 user roles (Admin, Creative Lead, Creative User, Reviewer, Viewer, Client) | PRD §2 |
 | 11 | Basic auth + 2 groups MVP | PRD §3, SRS §5 |
-| 12 | One ElevenLabs voice ID | PRD §3, SRS §4 |
+| 12 | One configured voice ID, with TTS provider fallback order ElevenLabs → Gemini TTS → Fish Audio → fail clearly | PRD §3, PRD §5 PR-25, SRS §2 FR-06, SRS §4, Design §9 |
 | 13 | Budget East default model preset | PRD §13, Design §12 |
 | 14 | LLM cost target < $0.01/video | PRD §10, SRS §3 |
 | 15 | Pipeline success rate > 90% | PRD §10, SRS §3 |
@@ -63,8 +63,8 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 41 | Data retention schedule | SRS §6.3 |
 | 42 | 7 MVP agents | Design §4 |
 | 43 | DB-driven state, orchestrator | Design §1 |
-| 44 | All agent states visible in dashboard | SRS §2 FR-14 |
-| 45 | Jobs restartable at any stage | SRS §3 NFR-08 |
+| 44 | Agent states, timestamps, gate results, provider attempts, artifact paths, and failure summaries visible in debug-first dashboard/CLI | SRS §2 FR-14, Design §1 |
+| 45 | Jobs restartable in principle from persisted DB state plus job workspace artifacts; write-enabled retry/resume follows after artifact contracts stabilize | SRS §3 NFR-08, Design §1 |
 
 ### From Archived TRD (additional facts not covered above)
 
@@ -106,7 +106,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 69 | Structured logging: all agents log start/result/error; all services log API requests/responses; LLM client logs model, tokens, cost, latency | SRS §2 FR-25, SRS §3 NFR-10, Design §2 |
 | 70 | ScrapeCreators: `trim=true` + `_extract_fields()` reduces 1-2MB raw responses to ~500 chars/result; max 20 results | SRS §2 FR-16, SRS §4, Design §4 |
 | 71 | Researcher token guard: `MAX_SOURCE_CHARS=40000`, `MAX_CHARS_PER_SOURCE=500` prevents 551K token LLM overflow | SRS §2 FR-16, Design §4 |
-| 72 | Researcher file cache: `scrapecreators.json`, `firecrawl.json`, `research_brief.json` per job output dir | Design §4, Design §9 |
+| 72 | Researcher file cache existed as `scrapecreators.json`, `firecrawl.json`, `research_brief.json` per job output dir in Phase 11; Phase 12 supersedes this with `ASSETS_CACHE/job_{id}/agents/researcher/` raw/normalized artifacts and `research_brief.md` | Design §4, Design §9 |
 | 73 | `clipper_agency/core/paths.py`: shared cache path helpers; `clipper_agency/core/logging.py`: `setup_logging()` + `get_logger()` | Design §9 |
 | 74 | `test-agent` CLI subcommand: runs individual agents independently, bypasses orchestrator DB tracking | SRS §2 FR-19, Design §13 |
 
@@ -114,12 +114,22 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 
 | # | Fact | New Location |
 |---|------|-------------|
-| 75 | Configurable TTS provider: `VoiceProducerAgent._detect_provider()` auto-selects Fish Audio > ElevenLabs > raise error based on env vars | PRD §5 PR-25, SRS §2 FR-06, Design §4, Design §9 |
+| 75 | Configurable TTS provider fallback now attempts ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly and persists sanitized provider attempts | PRD §5 PR-25, SRS §2 FR-06, SRS §4, Design §4, Design §9 |
 | 76 | `FishAudioService`: s2-pro model (`POST /v1/tts`), `reference_id` for voice model, Bearer auth, mp3 output | Design §2, Design §9 |
 | 77 | `_extract_fields()` handles both `aweme_info`-wrapped (full API) and flat (trim=true) responses via `source = item.get("aweme_info") or item`; trimmed responses have no music or hashtags | Design §4, SRS §2 FR-16 |
 | 78 | `AppSettings` fields: `fish_audio_api_key` (validation_alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id` | Design §9, SRS §5 |
 | 79 | Voice provider env var fallback: `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` (Fish Audio), `ELEVENLABS_API_KEY` (ElevenLabs) | SRS §4, Design §9 |
 | 80 | Free tier API blocked for both ElevenLabs (401 abuse detection) and Fish Audio (402 insufficient balance). Both require paid plans. | PRD §3, SRS §4 |
+
+### From Phase 12 Artifact Contracts + Debug Observability
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 81 | Intermediate artifacts, raw provider responses, agent inputs/outputs, gate results, diagnostics, and `manifest.json` live under `ASSETS_CACHE/job_{id}` | PRD §4, SRS §2 FR-15, SRS §6.2-6.3, Design §1 |
+| 82 | Final customer package lives under `OUTPUT_DIR/job_{id}` and contains only `video.mp4`, `caption.txt`, `thumbnail.png`, and `metadata.json` | PRD §4, SRS §2 FR-10/FR-15, Design §1 |
+| 83 | Researcher persists `research_brief.md`, `research_contract.json`, raw ScrapeCreators/Firecrawl payloads, and normalized derived files | PRD §4, SRS §6.3, Design §4 |
+| 84 | Every gate persists one JSON result and hard-fail gates stop downstream execution | PRD §5 PR-02, SRS §2 FR-01/FR-14, Design §3 |
+| 85 | Agent DB states transition pending → running → completed/failed with timestamps and error details | SRS §3 NFR-07, Design §1 |
 
 ---
 
@@ -140,7 +150,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | PR-15 | NFR-04 | §12 Cost | N/A | Model pricing change | Cost recalculation |
 | PR-22 | FR-24 | §9 Config, §9 Env Layer | N/A | Missing model env var | Default to `mimo-v2-flash` |
 | PR-23 | FR-25, NFR-10 | §2 Logging | N/A | Log level misconfigured | Default to INFO |
-| PR-25 | FR-06 | §4 Voice Provider, §9 Env Layer | G8 | Both provider keys missing | Clear error, stop pipeline |
+| PR-25 | FR-06 | §4 Voice Provider, §9 Env Layer | G8 | ElevenLabs missing/fails, Gemini missing/fails, Fish Audio missing/fails | Try fallback order, persist attempts, then clear error/stop pipeline |
 
 ### MVP P1 Requirements
 
@@ -187,10 +197,12 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 
 | # | Edge Case | Handling | Location |
 |---|-----------|----------|----------|
-| E13 | ElevenLabs API fails | Stop. Human-triggered retry. | PRD §8 |
-| E14 | ElevenLabs rate limit hit | Same as E13 | PRD §8 |
+| E13 | ElevenLabs API fails | Try Gemini TTS; if Gemini fails/missing, try Fish Audio; if all fail, stop clearly. | PRD §8, SRS §4 |
+| E14 | ElevenLabs rate limit hit | Same as E13; sanitized provider attempt recorded. | PRD §8, SRS §4 |
 | E15 | Generated audio file is corrupt | G8 hard-fail → stop, human retry | Design §3 G8 |
 | E16 | Audio duration mismatch with script | G8 soft-fail if <2s, hard-fail if way off | Design §3 G8 |
+| E16a | Gemini TTS key missing or PCM/WAV conversion fails | Try Fish Audio; if all providers fail, stop clearly with attempts persisted. | SRS §4, Design §9 |
+| E16b | All TTS providers missing or return non-success | Voice Producer returns clear failure, no visual/composer work starts. | PRD §8, SRS §2 FR-06 |
 
 ### Visual/Asset Edge Cases
 
@@ -259,6 +271,8 @@ Use this checklist to verify the documentation set is airtight. Any reviewer (hu
 - [ ] MVP scope dimensions (1 client, TikTok, Indonesian, etc.) are stated in PRD §3 and referenced in SRS/Design.
 - [ ] Provider routing is consistent across SRS §4 (research) and Design §2 (media download) — note these are different routing chains for different purposes.
 - [ ] Asset safeguards (clip duration, transformation, fallback) are consistent across PRD §9, SRS §7, Design §7.
+- [ ] TTS fallback order is consistent across PRD §3/§5/§8, SRS §2/§4, and Design §4/§9.
+- [ ] Job workspace and final output package boundaries are consistent across PRD §4, SRS §2/§6, and Design §1/§4/§7.
 
 ### Flow Completeness
 
@@ -293,6 +307,8 @@ Use this checklist to verify the documentation set is airtight. Any reviewer (hu
 - [ ] No edge case results in silent failure.
 - [ ] No edge case results in unbounded spending.
 - [ ] No edge case results in unsafe content being published.
+- [ ] Provider fallback failures leave enough sanitized diagnostics to explain what happened without exposing secrets.
+- [ ] Raw and normalized research artifacts are distinct so retries/debugging do not lose provider evidence.
 
 ### Missing/Gap Check
 

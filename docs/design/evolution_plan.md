@@ -1,8 +1,8 @@
 # Clipper Agency — Evolution Plan
 
-**Version:** 2.1
-**Date:** 2026-05-27
-**Status:** Final — MVP Implementation Complete (Phase 0-9)
+**Version:** 2.2
+**Date:** 2026-05-28
+**Status:** MVP Repair In Progress — Future Scope Updated During Phase 12
 
 ---
 
@@ -45,6 +45,22 @@ Manual: user enters post URL + platform + account + posted_at + job_id after upl
 - Actual cost tracking per agent/tool per job
 - Full preflight cost/risk estimator (not just lightweight warning)
 - Creative Director Agent: proposes new angles/templates when variation exhausted
+- Full observability dashboard beyond Phase 12's debug-first internal pages
+
+### Full Observability Dashboard
+
+Phase 12 adds read-only debug-first job pages/API so operators can see where a job failed. The polished production dashboard remains Stage 2+ scope:
+
+- polished pipeline timeline with visual status icons
+- retry-from-step buttons
+- artifact browser with download buttons
+- video/audio preview
+- provider latency and cost charts
+- gate decision explanations
+- dashboard notifications
+- approval workflow integration
+- filtered job history
+- searchable logs
 
 ### Budget Envelope
 
