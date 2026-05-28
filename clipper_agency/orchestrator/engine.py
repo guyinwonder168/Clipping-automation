@@ -91,11 +91,14 @@ class Orchestrator:
     def _stage_safety(
         self, conn: Any, topic: str, niche: str,
         assets_cache: str, output_dir: str,
+        config_snapshot: dict | None = None,
     ) -> tuple[int, dict[str, Any]] | dict[str, Any]:
         """Run G1 preflight, create job, G2 cost, safety agent.
 
         Returns (job_id, cost_result) on success or a failure dict.
         """
+        snapshot = config_snapshot or {}
+
         # G1: Input Preflight
         g1 = GateInputPreflight()
         g1_result = g1.evaluate(topic=topic, niche_config={"name": niche})
@@ -106,11 +109,13 @@ class Orchestrator:
             return {"status": "failed", "failed_at": "preflight",
                     "reason": g1_result.message, "job_id": 0}
 
-        # Create job in DB
-        job_id = create_job(conn, topic=topic, niche=niche)
+        # Create job in DB with config snapshot
+        job_id = create_job(conn, topic=topic, niche=niche,
+                            config_snapshot=snapshot)
         logger.info("Job #%d created", job_id)
         create_manifest(assets_cache, job_id, topic,
-                        output_dir if output_dir else "outputs")
+                        output_dir if output_dir else "outputs",
+                        config_snapshot=snapshot)
         agent_names = [
             "safety", "researcher", "scriptwriter",
             "voice_producer", "visual_director", "composer", "reviewer",
@@ -316,8 +321,17 @@ class Orchestrator:
         assets_cache = str(kwargs.get("assets_cache") or settings.assets_cache)
         logger.info("Pipeline START: niche='%s'", niche)
 
+        # Build config snapshot for retry/resume determinism
+        config_snapshot = {
+            "topic": topic,
+            "niche": niche,
+            "output_dir": output_dir,
+            "assets_cache": assets_cache,
+        }
+
         # Stage 1: Preflight + Safety
-        stage1 = self._stage_safety(conn, topic, niche, assets_cache, output_dir)
+        stage1 = self._stage_safety(conn, topic, niche, assets_cache,
+                                     output_dir, config_snapshot=config_snapshot)
         if isinstance(stage1, dict):
             return stage1
         job_id, cost_result = stage1

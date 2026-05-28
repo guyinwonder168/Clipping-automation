@@ -6,6 +6,7 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
+from clipper_agency.config.loader import load_settings
 from clipper_agency.db.connection import close_connection, get_connection
 from clipper_agency.db.schema import initialize_schema
 from clipper_agency.orchestrator.engine import Orchestrator
@@ -952,3 +953,79 @@ class TestOrchestratorRunPipeline:
             (result["job_id"], "scriptwriter"),
         ).fetchone()
         assert scriptwriter_state["state"] == "pending"
+
+
+# ── Phase 13: Config snapshot persistence ────────────────────────
+
+
+class TestConfigSnapshot:
+    """Tests for config snapshot persistence in pipeline runs."""
+
+    def test_pipeline_stores_config_snapshot_in_db(self, db_initialized, tmp_path):
+        """run_pipeline should persist config_snapshot in the jobs table."""
+        orch = Orchestrator(db_path=db_initialized)
+        audio = tmp_path / "a.mp3"; audio.write_bytes(b"x")
+        asset = tmp_path / "v.mp4"; asset.write_bytes(b"x")
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": [{"url": "https://a.com", "title": "S1"}]}
+            mock_scriptwriter.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_voice.return_value = {"status": "completed", "audio_files": [str(audio)]}
+            mock_visual.return_value = {"status": "completed", "assets": [{"scene": 1, "source": "pexels", "path": str(asset)}]}
+            mock_composer.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": "/tmp/thumb.png"}
+            mock_reviewer.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline(topic="Test topic", niche="test_niche")
+
+        assert result["status"] == "completed"
+        conn = get_connection(db_initialized)
+        job = conn.execute(
+            "SELECT config_snapshot FROM jobs WHERE id = ?",
+            (result["job_id"],),
+        ).fetchone()
+        assert job["config_snapshot"] is not None
+        snapshot = json.loads(job["config_snapshot"])
+        assert snapshot["niche"] == "test_niche"
+        assert snapshot["topic"] == "Test topic"
+
+    def test_manifest_includes_config_snapshot(self, db_initialized, tmp_path):
+        """Manifest should include config_snapshot field."""
+        orch = Orchestrator(db_path=db_initialized)
+        audio = tmp_path / "a.mp3"; audio.write_bytes(b"x")
+        asset = tmp_path / "v.mp4"; asset.write_bytes(b"x")
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": [{"url": "https://a.com", "title": "S1"}]}
+            mock_scriptwriter.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_voice.return_value = {"status": "completed", "audio_files": [str(audio)]}
+            mock_visual.return_value = {"status": "completed", "assets": [{"scene": 1, "source": "pexels", "path": str(asset)}]}
+            mock_composer.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": "/tmp/thumb.png"}
+            mock_reviewer.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline(topic="Test topic", niche="test_niche",
+                                       assets_cache=str(tmp_path / "cache"))
+
+        assert result["status"] == "completed"
+        from clipper_agency.core.manifest import load_manifest
+        ac = str(tmp_path / "cache")
+        manifest = load_manifest(ac, result["job_id"])
+        assert "config_snapshot" in manifest
+        assert manifest["config_snapshot"]["niche"] == "test_niche"

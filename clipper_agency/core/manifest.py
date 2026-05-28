@@ -12,13 +12,15 @@ def _manifest_path(assets_cache: str, job_id: int) -> Path:
 
 
 def create_manifest(assets_cache: str, job_id: int, topic: str,
-                    output_dir: str) -> Path:
+                    output_dir: str,
+                    config_snapshot: dict | None = None) -> Path:
     """Create initial manifest.json for a job workspace."""
     manifest = {
         "job_id": job_id,
         "topic": topic,
         "assets_cache": assets_cache,
         "output_dir": output_dir,
+        "config_snapshot": config_snapshot or {},
         "created_at": datetime.now(timezone.utc).isoformat(),
         "agents": {},
         "gates": {},
@@ -46,6 +48,7 @@ def _update_inplace(assets_cache: str, job_id: int,
             "topic": "",
             "assets_cache": assets_cache,
             "output_dir": "",
+            "config_snapshot": {},
             "agents": {},
             "gates": {},
             "final_outputs": {},
