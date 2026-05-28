@@ -472,7 +472,7 @@ git commit -m "feat: persist safety agent artifacts"
 **Files:**
 - Modify: `clipper_agency/agents/researcher.py`
 - Modify: `clipper_agency/orchestrator/engine.py`
-- Test: `tests/test_researcher.py`
+- Test: `tests/test_agents_researcher.py`
 
 **Step 1: Write failing tests**
 
@@ -499,7 +499,7 @@ job_125/agents/researcher/output.json
 **Step 2: Run failing test**
 
 ```bash
-.venv/bin/python3 -m pytest tests/test_researcher.py -v
+.venv/bin/python3 -m pytest tests/test_agents_researcher.py -v
 ```
 
 Expected: FAIL because current Researcher writes only `research/*.json` under output dir.
@@ -530,7 +530,7 @@ return {
 **Step 4: Verify**
 
 ```bash
-.venv/bin/python3 -m pytest tests/test_researcher.py -v
+.venv/bin/python3 -m pytest tests/test_agents_researcher.py -v
 ```
 
 Expected: PASS.
@@ -538,7 +538,7 @@ Expected: PASS.
 **Step 5: Commit**
 
 ```bash
-git add clipper_agency/agents/researcher.py clipper_agency/orchestrator/engine.py tests/test_researcher.py
+git add clipper_agency/agents/researcher.py clipper_agency/orchestrator/engine.py tests/test_agents_researcher.py
 git commit -m "feat: persist researcher contract artifacts"
 ```
 
@@ -549,7 +549,7 @@ git commit -m "feat: persist researcher contract artifacts"
 **Files:**
 - Modify: `clipper_agency/agents/scriptwriter.py`
 - Modify: `clipper_agency/orchestrator/engine.py`
-- Test: `tests/test_scriptwriter.py`
+- Test: `tests/test_agents_scriptwriter.py`
 
 **Step 1: Write failing test**
 
@@ -566,7 +566,7 @@ job_125/agents/scriptwriter/output.json
 **Step 2: Run failing test**
 
 ```bash
-.venv/bin/python3 -m pytest tests/test_scriptwriter.py -v
+.venv/bin/python3 -m pytest tests/test_agents_scriptwriter.py -v
 ```
 
 Expected: FAIL because Scriptwriter does not persist artifacts.
@@ -581,7 +581,7 @@ Expected: FAIL because Scriptwriter does not persist artifacts.
 **Step 4: Verify**
 
 ```bash
-.venv/bin/python3 -m pytest tests/test_scriptwriter.py -v
+.venv/bin/python3 -m pytest tests/test_agents_scriptwriter.py -v
 ```
 
 Expected: PASS.
@@ -589,7 +589,7 @@ Expected: PASS.
 **Step 5: Commit**
 
 ```bash
-git add clipper_agency/agents/scriptwriter.py clipper_agency/orchestrator/engine.py tests/test_scriptwriter.py
+git add clipper_agency/agents/scriptwriter.py clipper_agency/orchestrator/engine.py tests/test_agents_scriptwriter.py
 git commit -m "feat: persist scriptwriter artifacts"
 ```
 
@@ -1389,8 +1389,8 @@ git commit -m "docs: add adr for job artifact workspace"
 .venv/bin/python3 -m pytest \
   tests/test_paths.py \
   tests/test_artifacts.py \
-  tests/test_researcher.py \
-  tests/test_scriptwriter.py \
+  tests/test_agents_researcher.py \
+  tests/test_agents_scriptwriter.py \
   tests/test_voice_producer.py \
   tests/test_visual_director.py \
   tests/test_composer.py \
