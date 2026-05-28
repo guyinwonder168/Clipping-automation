@@ -129,16 +129,16 @@ class TestPackagerFileCopy:
         """Lines 65-66: unexpected exception during packaging returns failed."""
         mocker.patch("clipper_agency.output.packager.probe_video",
                      return_value=Mock(width=1080, height=1920, codec="h264",
-                                       duration=30.0, has_audio=True))
-        mocker.patch("shutil.copy2", side_effect=OSError("disk full"))
+                                        duration=30.0, has_audio=True))
         packager = OutputPackager()
         output_dir = tmp_path / "output"
-        source_video = output_dir / "job_5" / "source.mp4"
-        source_video.parent.mkdir(parents=True)
-        source_video.write_text("video")
+        final_video = output_dir / "job_5" / "video.mp4"
+        final_video.parent.mkdir(parents=True)
+        final_video.write_text("video")
+        mocker.patch("pathlib.Path.write_text", side_effect=OSError("disk full"))
         result = packager.package(
             job_id=5,
-            video_path=str(source_video),
+            video_path=str(final_video),
             caption_path="",
             thumbnail_path="",
             metadata={},
@@ -147,10 +147,16 @@ class TestPackagerFileCopy:
         assert result["status"] == "failed"
         assert "disk full" in result["error"]
 
-    def test_package_rejects_video_outside_job_output_dir(self, tmp_path, mocker):
-        """Package only accepts Composer video from this job's output directory."""
-        probe = mocker.patch("clipper_agency.output.packager.probe_video")
+    def test_package_uses_fixed_job_video_contract_not_video_path_argument(self, tmp_path, mocker):
+        """Package validates job-owned video.mp4 instead of caller-supplied paths."""
+        probe = mocker.patch("clipper_agency.output.packager.probe_video",
+                             return_value=Mock(width=1080, height=1920, codec="h264",
+                                               duration=30.0, has_audio=True))
         packager = OutputPackager()
+        output_dir = tmp_path / "output"
+        final_video = output_dir / "job_7" / "video.mp4"
+        final_video.parent.mkdir(parents=True)
+        final_video.write_text("video")
         outside_video = tmp_path / "outside.mp4"
         outside_video.write_text("video")
 
@@ -160,15 +166,42 @@ class TestPackagerFileCopy:
             caption_path="",
             thumbnail_path="",
             metadata={},
+            output_dir=str(output_dir),
+        )
+
+        assert result["status"] == "completed"
+        assert result["video_path"] == str(final_video)
+        probe.assert_called_once()
+
+    def test_package_fails_when_fixed_job_video_is_missing(self, tmp_path, mocker):
+        """Package does not fall back to arbitrary caller-supplied video paths."""
+        probe = mocker.patch("clipper_agency.output.packager.probe_video")
+        packager = OutputPackager()
+        outside_video = tmp_path / "outside.mp4"
+        outside_video.write_text("video")
+
+        result = packager.package(
+            job_id=8,
+            video_path=str(outside_video),
+            caption_path="",
+            thumbnail_path="",
+            metadata={},
             output_dir=str(tmp_path / "output"),
         )
 
         assert result["status"] == "failed"
-        assert "outside job output directory" in result["error"]
+        assert "job-owned video.mp4" in result["error"]
         probe.assert_not_called()
 
 
 class TestPackageValidation:
+    def _job_output_with_video(self, tmp_path) -> Path:
+        job_output_dir = tmp_path / "job_1"
+        video_path = job_output_dir / "video.mp4"
+        job_output_dir.mkdir(parents=True)
+        video_path.write_text("video")
+        return job_output_dir
+
     def test_package_validates_video_resolution(self, tmp_path, mocker):
         """Rejects video not 1080x1920."""
         mocker.patch("clipper_agency.output.packager.probe_video",
@@ -176,9 +209,8 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=True))
 
         packager = OutputPackager()
-        video_path = tmp_path / "vid.mp4"
-        video_path.write_text("video")
-        result = packager._validate_output_media(str(video_path), tmp_path)
+        job_output_dir = self._job_output_with_video(tmp_path)
+        result = packager._validate_output_media(job_output_dir)
         assert result.valid is False
         assert "resolution" in result.message.lower() or "1080" in result.message.lower()
 
@@ -189,9 +221,8 @@ class TestPackageValidation:
                                        duration=10.0, has_audio=True))
 
         packager = OutputPackager()
-        video_path = tmp_path / "vid.mp4"
-        video_path.write_text("video")
-        result = packager._validate_output_media(str(video_path), tmp_path)
+        job_output_dir = self._job_output_with_video(tmp_path)
+        result = packager._validate_output_media(job_output_dir)
         assert result.valid is False
 
     def test_package_validates_video_duration_too_long(self, tmp_path, mocker):
@@ -201,9 +232,8 @@ class TestPackageValidation:
                                        duration=90.0, has_audio=True))
 
         packager = OutputPackager()
-        video_path = tmp_path / "vid.mp4"
-        video_path.write_text("video")
-        result = packager._validate_output_media(str(video_path), tmp_path)
+        job_output_dir = self._job_output_with_video(tmp_path)
+        result = packager._validate_output_media(job_output_dir)
         assert result.valid is False
 
     def test_package_validates_audio_track_present(self, tmp_path, mocker):
@@ -213,9 +243,8 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=False))
 
         packager = OutputPackager()
-        video_path = tmp_path / "vid.mp4"
-        video_path.write_text("video")
-        result = packager._validate_output_media(str(video_path), tmp_path)
+        job_output_dir = self._job_output_with_video(tmp_path)
+        result = packager._validate_output_media(job_output_dir)
         assert result.valid is False
 
     def test_package_validates_codec(self, tmp_path, mocker):
@@ -225,9 +254,8 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=True))
 
         packager = OutputPackager()
-        video_path = tmp_path / "vid.mp4"
-        video_path.write_text("video")
-        result = packager._validate_output_media(str(video_path), tmp_path)
+        job_output_dir = self._job_output_with_video(tmp_path)
+        result = packager._validate_output_media(job_output_dir)
         assert result.valid is False
         assert "codec" in result.message.lower()
 
@@ -238,7 +266,6 @@ class TestPackageValidation:
                                        duration=30.0, has_audio=True))
 
         packager = OutputPackager()
-        video_path = tmp_path / "vid.mp4"
-        video_path.write_text("video")
-        result = packager._validate_output_media(str(video_path), tmp_path)
+        job_output_dir = self._job_output_with_video(tmp_path)
+        result = packager._validate_output_media(job_output_dir)
         assert result.valid is True

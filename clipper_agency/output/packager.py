@@ -9,7 +9,6 @@ from typing import Any
 
 from clipper_agency import __version__
 from clipper_agency.core.media_probe import probe_video
-from clipper_agency.core.safe_paths import resolve_existing_file_under
 
 
 @dataclass
@@ -24,19 +23,19 @@ class OutputPackager:
 
     def _validate_output_media(
         self,
-        video_path: str,
-        allowed_base_dir: str | Path,
+        job_output_dir: str | Path,
     ) -> ValidationResult:
         """Validate output video meets quality requirements.
 
         Checks resolution (1080x1920), codec (h264), duration (20-60s),
         and audio track presence.
         """
-        safe_path = resolve_existing_file_under(allowed_base_dir, video_path)
-        if safe_path is None:
-            return ValidationResult(valid=False, message="invalid video path")
+        output_dir = Path(job_output_dir)
+        video_name = "video.mp4"
+        if not (output_dir / video_name).is_file():
+            return ValidationResult(valid=False, message="missing job-owned video.mp4")
 
-        info = probe_video(safe_path, allowed_base_dir)
+        info = probe_video(video_name, output_dir)
         if info is None:
             return ValidationResult(valid=False, message="cannot probe video")
 
@@ -81,24 +80,15 @@ class OutputPackager:
             final_thumbnail = out / "thumbnail.png"
             meta_file = out / "metadata.json"
 
-            # Copy video unless composer already wrote the final path.
-            source_video = (
-                resolve_existing_file_under(out, video_path)
-                if video_path else None
-            )
-            if source_video is None:
+            # Composer owns this contract path. Do not open arbitrary caller paths.
+            if not final_video.is_file():
                 return {
                     "status": "failed",
-                    "error": (
-                        "Video source not found or outside job output directory: "
-                        f"{video_path}"
-                    ),
+                    "error": "Missing job-owned video.mp4 in output directory",
                     "output_dir": str(out),
                 }
-            if source_video != final_video.resolve():
-                shutil.copy2(source_video, final_video)
 
-            validation = self._validate_output_media(str(final_video), out)
+            validation = self._validate_output_media(out)
             if not validation.valid:
                 return {
                     "status": "failed",
