@@ -1,5 +1,6 @@
 """Composer Agent — FFmpeg-based video assembly and thumbnail generation."""
 
+import dataclasses
 import logging
 import subprocess
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import Any
 
 from clipper_agency.agents.base import BaseAgent
 from clipper_agency.core.artifacts import write_json
+from clipper_agency.core.ffmpeg_preflight import FFmpegPreflight
 from clipper_agency.core.paths import (
     agent_input_file,
     agent_output_file,
@@ -33,6 +35,39 @@ class ComposerAgent(BaseAgent):
     ) -> dict[str, Any]:
         video_assets = assets or []
         voice_files = audio_files or []
+
+        # ── FFmpeg preflight diagnostics ──
+        try:
+            preflight = FFmpegPreflight.probe()
+        except Exception as exc:
+            logger.error("Composer: FFmpeg preflight probe failed: %s", exc)
+            return {
+                "status": "failed",
+                "error": f"FFmpeg preflight probe failed: {exc}",
+            }
+        preflight_dir = (
+            Path(output_dir) / f"job_{job_id}" / "agents" / "composer"
+        )
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        write_json(
+            preflight_dir / "preflight.json",
+            dataclasses.asdict(preflight),
+        )
+        if not preflight.all_ok():
+            logger.error(
+                "Composer: FFmpeg preflight failed — ffmpeg=%s ffprobe=%s "
+                "libx264=%s aac=%s mp3=%s",
+                preflight.ffmpeg_found,
+                preflight.ffprobe_found,
+                preflight.libx264_available,
+                preflight.aac_available,
+                preflight.mp3_decode_available,
+            )
+            return {
+                "status": "failed",
+                "error": "FFmpeg preflight failed",
+                "preflight": dataclasses.asdict(preflight),
+            }
 
         assets_cache = kwargs.get("assets_cache", "")
         agent_dir = ""
