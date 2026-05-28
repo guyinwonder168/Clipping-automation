@@ -492,7 +492,6 @@ class Orchestrator:
         pkg_output = self._package_output(
             job_id=job_id,
             video_path=compose_output.get("video_path", ""),
-            thumbnail_path=compose_output.get("thumbnail_path", ""),
             caption=script_output.get("caption", ""),
             topic=topic, niche=niche, output_dir=output_dir,
         )
@@ -835,7 +834,7 @@ class Orchestrator:
         )
 
     def _package_output(self, job_id: int, video_path: str,
-                        thumbnail_path: str, caption: str,
+                        caption: str,
                         topic: str, niche: str,
                         output_dir: str = "outputs",
                         **kwargs: Any) -> dict[str, Any]:
