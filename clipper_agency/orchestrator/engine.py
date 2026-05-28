@@ -1,5 +1,6 @@
 """Orchestrator Engine — coordinates the full gated agent pipeline."""
 
+import json
 import logging
 from dataclasses import asdict
 from typing import Any
@@ -22,8 +23,12 @@ from clipper_agency.core.manifest import (
 from clipper_agency.core.paths import gate_result_file
 from clipper_agency.db.connection import get_connection
 from clipper_agency.db.queries import (
+    PIPELINE_ORDER,
+    append_audit_log,
     create_agent_state,
     create_job,
+    get_agent_state,
+    get_job,
     mark_agent_completed,
     mark_agent_failed,
     mark_agent_running,
@@ -418,6 +423,276 @@ class Orchestrator:
             logger.exception("Pipeline FAILED: job #%d — %s", job_id, e)
             update_job_status(conn, job_id, "FAILED", str(e))
             return {"status": "failed", "error": str(e), "job_id": job_id}
+
+    def _load_agent_output(self, assets_cache: str, job_id: int,
+                           agent_name: str) -> dict[str, Any]:
+        """Load a completed agent's output.json from the artifact workspace."""
+        from clipper_agency.core.paths import agent_output_file
+        from clipper_agency.core.artifacts import read_json
+        path = agent_output_file(assets_cache, job_id, agent_name)
+        try:
+            return read_json(path)
+        except (FileNotFoundError, ValueError):
+            return {}
+
+    def run_pipeline_from(
+        self, job_id: int, from_agent: str, use_cache: bool = False,
+    ) -> dict[str, Any]:
+        """Re-run pipeline from a specific agent, reusing completed outputs.
+
+        Reconstructs intermediate data from persisted agent output.json files
+        and skips agents that completed before ``from_agent``.
+        """
+        conn = get_connection(self.db_path)
+        job = get_job(conn, job_id)
+        if not job:
+            return {"status": "failed", "reason": f"Job {job_id} not found",
+                    "job_id": job_id}
+
+        # Load config snapshot
+        snapshot_raw = job.get("config_snapshot")
+        snapshot = json.loads(snapshot_raw) if snapshot_raw else {}
+        topic = snapshot.get("topic", job.get("topic", ""))
+        niche = snapshot.get("niche", job.get("niche", "indonesian_artists"))
+        output_dir = snapshot.get("output_dir", "outputs")
+        assets_cache = snapshot.get("assets_cache", "")
+        if not assets_cache:
+            settings = load_settings()
+            assets_cache = str(settings.assets_cache)
+
+        update_job_status(conn, job_id, "RUNNING")
+        append_audit_log(conn, action="pipeline_retry", actor="engine",
+                         resource_type="job", resource_id=job_id,
+                         details=json.dumps({"from_agent": from_agent,
+                                             "use_cache": use_cache}))
+
+        if from_agent not in PIPELINE_ORDER:
+            update_job_status(conn, job_id, "FAILED",
+                              f"Unknown agent: {from_agent}")
+            return {"status": "failed", "reason": f"Unknown agent: {from_agent}",
+                    "job_id": job_id}
+
+        from_idx = PIPELINE_ORDER.index(from_agent)
+
+        # Reconstruct completed upstream outputs
+        research_output: dict[str, Any] = {}
+        script_output: dict[str, Any] = {}
+        voice_output: dict[str, Any] = {}
+        visual_output: dict[str, Any] = {}
+
+        if from_idx > PIPELINE_ORDER.index("researcher"):
+            research_output = self._load_agent_output(
+                assets_cache, job_id, "researcher")
+        if from_idx > PIPELINE_ORDER.index("scriptwriter"):
+            script_output = self._load_agent_output(
+                assets_cache, job_id, "scriptwriter")
+        if from_idx > PIPELINE_ORDER.index("voice_producer"):
+            voice_output = self._load_agent_output(
+                assets_cache, job_id, "voice_producer")
+        if from_idx > PIPELINE_ORDER.index("visual_director"):
+            visual_output = self._load_agent_output(
+                assets_cache, job_id, "visual_director")
+
+        safety_rules = ["no_defamation", "mark_rumors_as_unconfirmed"]
+
+        try:
+            # Stage: Research (researcher + gates G3-G5)
+            if from_idx <= PIPELINE_ORDER.index("researcher"):
+                research_result = self._stage_research(
+                    conn, job_id, topic, safety_rules, assets_cache, output_dir,
+                )
+                if isinstance(research_result, dict) and research_result.get("status") == "failed":
+                    return research_result
+                research_output = research_result
+
+            # Stage: Content (scriptwriter + voice + gates G6-G8)
+            if from_idx <= PIPELINE_ORDER.index("scriptwriter"):
+                if use_cache:
+                    cached = self._load_agent_output(
+                        assets_cache, job_id, "scriptwriter")
+                    if cached:
+                        script_output = cached
+                    else:
+                        script_output = self._run_content_scriptwriter(
+                            conn, job_id, topic, safety_rules,
+                            research_output, assets_cache,
+                        )
+                else:
+                    script_output = self._run_content_scriptwriter(
+                        conn, job_id, topic, safety_rules,
+                        research_output, assets_cache,
+                    )
+
+            if from_idx <= PIPELINE_ORDER.index("voice_producer"):
+                if use_cache:
+                    cached = self._load_agent_output(
+                        assets_cache, job_id, "voice_producer")
+                    if cached:
+                        voice_output = cached
+                    else:
+                        voice_output = self._run_content_voice(
+                            conn, job_id, script_output,
+                            output_dir, assets_cache,
+                        )
+                else:
+                    voice_output = self._run_content_voice(
+                        conn, job_id, script_output,
+                        output_dir, assets_cache,
+                    )
+
+            # Stage: Composition (visual + composer + gates G9-G10)
+            if from_idx <= PIPELINE_ORDER.index("visual_director"):
+                mark_agent_running(conn, job_id, "visual_director")
+                sources_data = research_output.get("sources", {})
+                if isinstance(sources_data, dict):
+                    research_sources = sources_data.get("sources", [])
+                elif isinstance(sources_data, list):
+                    research_sources = sources_data
+                else:
+                    research_sources = []
+                source_urls = [s["url"] for s in research_sources
+                               if isinstance(s, dict) and s.get("url")]
+                visual_output = self._run_visual_director(
+                    job_id=job_id, script=script_output.get("script", []),
+                    topic=topic, source_urls=source_urls,
+                    output_dir=output_dir, assets_cache=assets_cache,
+                )
+                self._complete_agent(conn, assets_cache, job_id,
+                                     "visual_director")
+
+            if from_idx <= PIPELINE_ORDER.index("composer"):
+                mark_agent_running(conn, job_id, "composer")
+                compose_output = self._run_composer(
+                    job_id=job_id,
+                    assets=visual_output.get("assets", []),
+                    audio_files=voice_output.get("audio_files", []),
+                    output_dir=output_dir, assets_cache=assets_cache,
+                )
+
+                if compose_output.get("status") == "failed":
+                    mark_agent_failed(conn, job_id, "composer",
+                                       compose_output.get("error",
+                                                          _COMPOSER_FAILED))
+                    update_job_status(
+                        conn, job_id, "FAILED",
+                        compose_output.get("error", _COMPOSER_FAILED))
+                    return {"status": "failed", "failed_at": "composer",
+                            "reason": compose_output.get("error",
+                                                          _COMPOSER_FAILED),
+                            "job_id": job_id}
+                self._complete_agent(conn, assets_cache, job_id, "composer")
+
+                g10 = GateVideoValidation()
+                g10_result = g10.evaluate(
+                    video_path=compose_output.get("video_path"))
+                self._record_gate(assets_cache, job_id,
+                                  "G10_video_validation", g10_result)
+                if abort := self._enforce_gate(
+                    conn, job_id, "G10", g10_result,
+                    failed_at="video_validation",
+                ):
+                    return abort
+            else:
+                compose_output = self._load_agent_output(
+                    assets_cache, job_id, "composer")
+
+            # Stage: Review + Package
+            if from_idx <= PIPELINE_ORDER.index("reviewer"):
+                mark_agent_running(conn, job_id, "reviewer")
+                review_output = self._run_reviewer(
+                    job_id=job_id, topic=topic,
+                    script=script_output.get("script", []),
+                    caption=script_output.get("caption", ""),
+                    safety_rules=safety_rules,
+                )
+                self._complete_agent(conn, assets_cache, job_id, "reviewer")
+
+                pkg_output = self._package_output(
+                    job_id=job_id,
+                    video_path=compose_output.get("video_path", ""),
+                    thumbnail_path=compose_output.get("thumbnail_path", ""),
+                    caption=script_output.get("caption", ""),
+                    topic=topic, niche=niche, output_dir=output_dir,
+                )
+
+                if pkg_output.get("status") == "failed":
+                    update_job_status(
+                        conn, job_id, "FAILED",
+                        pkg_output.get("error", "Packaging failed"))
+                    return {"status": "failed", "failed_at": "packaging",
+                            "reason": pkg_output.get("error",
+                                                      "Packaging failed"),
+                            "job_id": job_id}
+
+                update_manifest_final(assets_cache, job_id, {
+                    "video": pkg_output.get("video_path", ""),
+                    "caption": pkg_output.get("caption_path", ""),
+                    "thumbnail": pkg_output.get("thumbnail_path", ""),
+                    "metadata": pkg_output.get("metadata_path", ""),
+                })
+
+            update_job_status(conn, job_id, "COMPLETED")
+            logger.info("Pipeline retry COMPLETED: job #%d from %s",
+                        job_id, from_agent)
+            return {"status": "completed", "job_id": job_id}
+
+        except Exception as e:
+            logger.exception("Pipeline retry FAILED: job #%d — %s", job_id, e)
+            update_job_status(conn, job_id, "FAILED", str(e))
+            return {"status": "failed", "error": str(e), "job_id": job_id}
+
+    def _run_content_scriptwriter(
+        self, conn: Any, job_id: int, topic: str,
+        safety_rules: list[str], research_output: dict[str, Any],
+        assets_cache: str,
+    ) -> dict[str, Any]:
+        """Run scriptwriter stage of content creation."""
+        g6 = GateCreativeMemory()
+        self._record_gate(assets_cache, job_id, "G6_creative_memory",
+                          g6.evaluate())
+
+        mark_agent_running(conn, job_id, "scriptwriter")
+        script_output = self._run_scriptwriter(
+            job_id=job_id, topic=topic,
+            research_brief=research_output.get("research_brief", ""),
+            safety_rules=safety_rules, assets_cache=assets_cache,
+        )
+        self._complete_agent(conn, assets_cache, job_id, "scriptwriter")
+
+        g7 = GateScriptValidation()
+        script_scenes = script_output.get("script", [])
+        script_text = " ".join(
+            s.get("text", "") for s in script_scenes
+        ) if isinstance(script_scenes, list) else str(script_scenes)
+        g7_result = g7.evaluate(
+            script=script_text,
+            caption=script_output.get("caption", ""),
+        )
+        self._record_gate(assets_cache, job_id, "G7_script_validation",
+                          g7_result)
+
+        return script_output
+
+    def _run_content_voice(
+        self, conn: Any, job_id: int,
+        script_output: dict[str, Any],
+        output_dir: str, assets_cache: str,
+    ) -> dict[str, Any]:
+        """Run voice producer stage of content creation."""
+        mark_agent_running(conn, job_id, "voice_producer")
+        voice_output = self._run_voice_producer(
+            job_id=job_id, script=script_output.get("script", []),
+            output_dir=output_dir, assets_cache=assets_cache,
+        )
+        self._complete_agent(conn, assets_cache, job_id, "voice_producer")
+
+        g8 = GateAudioValidation()
+        audio_list = voice_output.get("audio_files") or []
+        first_audio = audio_list[0] if audio_list else None
+        g8_result = g8.evaluate(audio_path=first_audio)
+        self._record_gate(assets_cache, job_id, "G8_audio_validation",
+                          g8_result)
+        return voice_output
 
     # ── Agent runner methods (extracted for testability) ──
 

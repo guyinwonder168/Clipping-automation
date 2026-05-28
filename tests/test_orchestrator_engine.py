@@ -1029,3 +1029,229 @@ class TestConfigSnapshot:
         manifest = load_manifest(ac, result["job_id"])
         assert "config_snapshot" in manifest
         assert manifest["config_snapshot"]["niche"] == "test_niche"
+
+
+class TestRunPipelineFrom:
+    """Tests for retry/resume pipeline execution from a specific agent."""
+
+    def _setup_completed_job(
+        self, db_path: str, assets_cache: str, output_dir: str,
+        completed_agents: list[str], failed_agent: str | None = None,
+        config_snapshot: dict | None = None,
+    ) -> int:
+        """Create a job with completed/failed agent states and output artifacts."""
+        from clipper_agency.db.connection import get_connection as _get_conn
+        from clipper_agency.db.queries import (
+            create_agent_state, create_job, mark_agent_completed,
+            mark_agent_failed, update_job_status,
+        )
+        from clipper_agency.db.schema import initialize_schema as _init
+
+        conn = _get_conn(db_path)
+        _init(conn)
+        snapshot = config_snapshot or {
+            "topic": "Test topic", "niche": "test_niche",
+            "output_dir": output_dir, "assets_cache": assets_cache,
+        }
+        job_id = create_job(conn, "Test topic", "test_niche",
+                            config_snapshot=snapshot)
+
+        all_agents = ["safety", "researcher", "scriptwriter",
+                      "voice_producer", "visual_director", "composer", "reviewer"]
+        for name in all_agents:
+            create_agent_state(conn, job_id, name)
+
+        for name in completed_agents:
+            mark_agent_completed(conn, job_id, name)
+
+        if failed_agent:
+            mark_agent_failed(conn, job_id, failed_agent, "test failure")
+            update_job_status(conn, job_id, "FAILED", "test failure")
+
+        # Write output.json for completed agents
+        from pathlib import Path as _P
+        agent_outputs = {
+            "safety": {"status": "pass", "reason": "Safe"},
+            "researcher": {
+                "status": "completed",
+                "research_brief": "Research brief text",
+                "sources": [{"url": "https://example.com", "title": "S1"}],
+                "risk_flags": [],
+            },
+            "scriptwriter": {
+                "status": "completed",
+                "script": [{"scene": 1, "text": "Halo!", "duration": 3}],
+                "caption": "Test caption",
+                "hashtags": [],
+                "estimated_duration": 3,
+            },
+            "voice_producer": {
+                "status": "completed",
+                "audio_files": [f"{assets_cache}/job_{job_id}/agents/voice_producer/voices/scene_1.mp3"],
+            },
+            "visual_director": {
+                "status": "completed",
+                "assets": [{"scene": 1, "source": "pexels", "path": f"{assets_cache}/job_{job_id}/agents/visual_director/scenes/scene_1.mp4"}],
+            },
+        }
+        for agent_name, output in agent_outputs.items():
+            if agent_name in completed_agents:
+                out_path = _P(assets_cache) / f"job_{job_id}" / "agents" / agent_name / "output.json"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(json.dumps(output), encoding="utf-8")
+
+        # Write manifest
+        manifest_path = _P(assets_cache) / f"job_{job_id}" / "manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps({
+            "job_id": job_id, "topic": "Test topic",
+            "config_snapshot": snapshot,
+            "agents": {}, "gates": {}, "final_outputs": {},
+        }), encoding="utf-8")
+
+        close_connection(db_path)
+        return job_id
+
+    def test_retry_from_researcher_skips_safety(self, db_initialized, tmp_path):
+        """run_pipeline_from('researcher') should not re-run safety."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=["safety"],
+        )
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety, \
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher, \
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_voice_producer") as mock_vp, \
+              patch.object(Orchestrator, "_run_visual_director") as mock_vd, \
+              patch.object(Orchestrator, "_run_composer") as mock_comp, \
+              patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+              patch.object(Orchestrator, "_package_output") as mock_pkg:
+             mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": [{"url": "https://a.com", "title": "S1"}]}
+             mock_sw.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+             mock_vp.return_value = {"status": "completed", "audio_files": []}
+             mock_vd.return_value = {"status": "completed", "assets": []}
+             mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+             mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+             mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+             result = orch.run_pipeline_from(job_id, from_agent="researcher")
+
+        assert result["status"] == "completed"
+        mock_safety.assert_not_called()
+        mock_researcher.assert_called_once()
+
+    def test_retry_from_composer_reconstructs_all_upstream(self, db_initialized, tmp_path):
+        """run_pipeline_from('composer') loads all upstream outputs from artifacts."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=["safety", "researcher", "scriptwriter",
+                              "voice_producer", "visual_director"],
+            failed_agent="composer",
+        )
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety, \
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher, \
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_voice_producer") as mock_vp, \
+             patch.object(Orchestrator, "_run_visual_director") as mock_vd, \
+             patch.object(Orchestrator, "_run_composer") as mock_comp, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+            mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline_from(job_id, from_agent="composer")
+
+        assert result["status"] == "completed"
+        # Upstream agents should NOT be called
+        mock_safety.assert_not_called()
+        mock_researcher.assert_not_called()
+        mock_sw.assert_not_called()
+        mock_vp.assert_not_called()
+        mock_vd.assert_not_called()
+        # Composer + reviewer should be called
+        mock_comp.assert_called_once()
+        mock_rev.assert_called_once()
+
+    def test_run_pipeline_from_updates_job_status_running(self, db_initialized, tmp_path):
+        """run_pipeline_from sets job to RUNNING before execution."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=["safety", "researcher", "scriptwriter",
+                              "voice_producer", "visual_director"],
+            failed_agent="composer",
+        )
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety"), \
+             patch.object(Orchestrator, "_run_researcher"), \
+             patch.object(Orchestrator, "_run_scriptwriter"), \
+             patch.object(Orchestrator, "_run_voice_producer"), \
+             patch.object(Orchestrator, "_run_visual_director"), \
+             patch.object(Orchestrator, "_run_composer") as mock_comp, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+            mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline_from(job_id, from_agent="composer")
+
+        from clipper_agency.db.connection import get_connection as _gc
+        conn = _gc(db_initialized)
+        job = conn.execute("SELECT status FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        assert job["status"] == "COMPLETED"
+
+    def test_run_pipeline_from_missing_job_returns_failure(self, db_initialized, tmp_path):
+        """run_pipeline_from returns failure for nonexistent job."""
+        orch = Orchestrator(db_path=db_initialized)
+        result = orch.run_pipeline_from(99999, from_agent="researcher")
+        assert result["status"] == "failed"
+
+    def test_run_pipeline_from_passes_reconstructed_research_to_scriptwriter(
+        self, db_initialized, tmp_path,
+    ):
+        """run_pipeline_from passes loaded research output to downstream stages."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=["safety", "researcher"],
+        )
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety"), \
+             patch.object(Orchestrator, "_run_researcher"), \
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_voice_producer") as mock_vp, \
+             patch.object(Orchestrator, "_run_visual_director") as mock_vd, \
+             patch.object(Orchestrator, "_run_composer") as mock_comp, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_sw.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_vp.return_value = {"status": "completed", "audio_files": []}
+            mock_vd.return_value = {"status": "completed", "assets": []}
+            mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+            mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline_from(job_id, from_agent="scriptwriter")
+
+        assert result["status"] == "completed"
+        # Verify scriptwriter received the reconstructed research_brief
+        sw_call = mock_sw.call_args[1]
+        assert sw_call["research_brief"] == "Research brief text"
