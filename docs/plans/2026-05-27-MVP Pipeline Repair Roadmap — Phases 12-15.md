@@ -2,6 +2,7 @@
 
 > Phase 12 ✅ Complete (merged `c001685` on master via PR #15).
 > Phase 13 ✅ Complete (merged `497aa3c` on master via PR #16).
+> Phase 14 ✅ Complete (merged `1f36918` on master via PR #17).
 
 **Goal:** Repair the MVP pipeline across Phases 12-15 so it matches the PRD/SRS/technical design: restartable job workspaces, persisted agent/gate contracts, retry/resume, correct media composition, template-driven rendering, and useful dashboard/CLI observability.
 
@@ -38,7 +39,7 @@ This is one roadmap for the remaining MVP cleanup. Each phase should still be im
 |---|---|---|---|
 | 12 | Artifact contracts + debug observability | Makes jobs inspectable, restartable in principle, and auditable. Fixes artifact layout, agent/gate dumps, DB state transitions, debug dashboard, and debug CLI. | `phase/12-artifact-layout-agent-contracts` |
 | 13 | Retry/resume + cache reuse | Makes jobs actually restartable at stages without wasting paid API calls. Adds `job-retry`, `job-resume`, config snapshots, and artifact reuse validation. | `phase/13-retry-resume-cache-reuse` — ✅ PR #16 merged |
-| 14 | Media/composer correctness | Makes generated videos satisfy MVP output requirements: 9:16, 1080x1920, 20-60s, audio track, valid clips, generated card fallback, thumbnail, metadata stripping. | `phase/14-media-composer-correctness` |
+| 14 | Media/composer correctness | Makes generated videos satisfy MVP output requirements: 9:16, 1080x1920, 20-60s, audio track, valid clips, generated card fallback, thumbnail, metadata stripping. | `phase/14-media-composer-correctness` — ✅ PR #17 merged |
 | 15 | Template rendering + full observability | Makes the three MVP templates real and upgrades dashboard from debug-first to production-useful observability. | `phase/15-template-rendering-observability` |
 
 Phases 12-15 are MVP repair work, not Stage 2+. Stage 2+ remains for scale, official APIs, advanced analytics, and broader provider expansion.
@@ -1682,6 +1683,8 @@ Generate template-based `thumbnail.png` at 1080x1920.
 - Final `video.mp4` passes G10 deterministic validation.
 - `thumbnail.png`, `caption.txt`, and `metadata.json` are generated consistently.
 - FFmpeg stderr and command logs are persisted for failed renders.
+
+**Status:** ✅ Complete. Merged `1f36918` on master via PR #17 (19 commits: FFmpeg preflight, media probing, scene validation/normalization, clip provenance, generated card fallback, card-to-video, composer assembly, output packaging validation, deterministic G10, fixed-contract packager with S6549 safe path sandbox).
 
 ---
 
