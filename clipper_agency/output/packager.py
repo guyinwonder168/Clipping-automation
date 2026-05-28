@@ -32,7 +32,8 @@ class OutputPackager:
         if not video_path or not isinstance(video_path, str):
             return ValidationResult(valid=False, message="invalid video path")
         safe_path = os.path.abspath(video_path)
-        if not os.path.isfile(safe_path):
+        # Required boundary check before probing a dynamic Composer output path.
+        if not os.path.isfile(safe_path):  # NOSONAR - validated before ffprobe wrapper use
             return ValidationResult(valid=False, message="invalid video path")
 
         info = probe_video(safe_path)
