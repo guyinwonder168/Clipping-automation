@@ -1,5 +1,7 @@
 """Tests for pipeline gate definitions (G1-G10)."""
 
+from pathlib import Path
+
 import pytest
 
 from clipper_agency.orchestrator.gates import (
@@ -266,6 +268,123 @@ def test_g9_no_valid_assets(tmp_path):
 
 # ── G10: Video Validation ────────────────────────────────────────
 
+class TestGateVideoValidation:
+    """Deterministic G10 output validation using ffprobe metadata."""
+
+    def test_g10_rejects_missing_file(self, mocker):
+        """G10 gate rejects when probe returns None (file missing/corrupt)."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=None,
+        )
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/missing.mp4")
+        assert not result.passed
+        assert "not found" in result.message.lower() or "unreadable" in result.message.lower()
+
+    def test_g10_rejects_wrong_resolution(self, mocker):
+        """G10 gate rejects video that is not 1080x1920."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mock_info = mocker.Mock(
+            width=1920, height=1080, codec="h264",
+            duration=30.0, has_audio=True, file_size=50000,
+        )
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=mock_info,
+        )
+
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/vid.mp4")
+        assert not result.passed
+        assert "resolution" in result.message.lower()
+
+    def test_g10_rejects_wrong_duration_short(self, mocker):
+        """G10 gate rejects video under 20s."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mock_info = mocker.Mock(
+            width=1080, height=1920, codec="h264",
+            duration=10.0, has_audio=True, file_size=50000,
+        )
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=mock_info,
+        )
+
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/vid.mp4")
+        assert not result.passed
+        assert "short" in result.message.lower() or "duration" in result.message.lower()
+
+    def test_g10_rejects_wrong_duration_long(self, mocker):
+        """G10 gate rejects video over 60s."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mock_info = mocker.Mock(
+            width=1080, height=1920, codec="h264",
+            duration=90.0, has_audio=True, file_size=50000,
+        )
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=mock_info,
+        )
+
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/vid.mp4")
+        assert not result.passed
+        assert "long" in result.message.lower() or "duration" in result.message.lower()
+
+    def test_g10_rejects_no_audio(self, mocker):
+        """G10 gate rejects video without audio track."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mock_info = mocker.Mock(
+            width=1080, height=1920, codec="h264",
+            duration=30.0, has_audio=False, file_size=50000,
+        )
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=mock_info,
+        )
+
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/vid.mp4")
+        assert not result.passed
+        assert "audio" in result.message.lower()
+
+    def test_g10_rejects_wrong_codec(self, mocker):
+        """G10 gate rejects non-h264 video."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mock_info = mocker.Mock(
+            width=1080, height=1920, codec="vp9",
+            duration=30.0, has_audio=True, file_size=50000,
+        )
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=mock_info,
+        )
+
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/vid.mp4")
+        assert not result.passed
+        assert "codec" in result.message.lower()
+
+    def test_g10_accepts_valid_video(self, mocker):
+        """G10 gate passes valid 1080x1920 h264 video with audio."""
+        mocker.patch.object(Path, "exists", return_value=True)
+        mock_info = mocker.Mock(
+            width=1080, height=1920, codec="h264",
+            duration=30.0, has_audio=True, file_size=50000,
+        )
+        mocker.patch(
+            "clipper_agency.orchestrator.gates.probe_video",
+            return_value=mock_info,
+        )
+
+        gate = GateVideoValidation()
+        result = gate.evaluate(video_path="/tmp/vid.mp4")
+        assert result.passed
+
+
 def test_g10_missing_video():
     gate = GateVideoValidation()
     result = gate.evaluate(video_path="/nonexistent/video.mp4")
@@ -275,16 +394,25 @@ def test_g10_missing_video():
 
 def test_g10_too_small_video(tmp_path):
     path = tmp_path / "tiny.mp4"
-    path.write_bytes(b"X" * 512)  # less than 1024 bytes
+    path.write_bytes(b"X" * 512)
     gate = GateVideoValidation()
     result = gate.evaluate(video_path=str(path))
     assert not result.passed
     assert result.severity == "hard_fail"
 
 
-def test_g10_valid_video(tmp_path):
+def test_g10_valid_video(tmp_path, mocker):
+    """G10 gate passes valid video with mocked probe metadata."""
     path = tmp_path / "video.mp4"
-    path.write_bytes(b"X" * 2048)  # >= 1024 bytes
+    path.write_bytes(b"X" * 2048)
+    mock_info = mocker.Mock(
+        width=1080, height=1920, codec="h264",
+        duration=30.0, has_audio=True, file_size=50000,
+    )
+    mocker.patch(
+        "clipper_agency.orchestrator.gates.probe_video",
+        return_value=mock_info,
+    )
     gate = GateVideoValidation()
     result = gate.evaluate(video_path=str(path))
     assert result.passed

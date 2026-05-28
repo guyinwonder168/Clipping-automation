@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from clipper_agency.core.media_probe import probe_video
+
 
 @dataclass
 class GateResult:
@@ -199,12 +201,66 @@ class GateAssetValidation(BaseGate):
 # ════════════════════════════════════════════════════════════════════
 
 class GateVideoValidation(BaseGate):
-    """G10: Video output validation."""
+    """G10: Deterministic video output validation using ffprobe metadata.
+
+    Checks resolution (1080x1920), codec (h264), duration (20-60s),
+    and audio track presence.
+    """
+
+    REQUIRED_WIDTH = 1080
+    REQUIRED_HEIGHT = 1920
+    REQUIRED_CODEC = "h264"
+    MIN_DURATION = 20
+    MAX_DURATION = 60
 
     def evaluate(self, video_path: str | None = None, **kwargs) -> GateResult:
         if not video_path or not Path(video_path).exists():
             return GateResult(False, "hard_fail", "Video file missing")
-        size = Path(video_path).stat().st_size
-        if size < 1024:
-            return GateResult(False, "hard_fail", "Video file too small (<1KB)")
+
+        info = probe_video(video_path, Path(video_path).parent)
+        if info is None:
+            return GateResult(
+                False, "hard_fail",
+                "Video file not found or unreadable by ffprobe",
+            )
+
+        if info.width != self.REQUIRED_WIDTH or info.height != self.REQUIRED_HEIGHT:
+            return GateResult(
+                False, "hard_fail",
+                f"Wrong resolution: {info.width}x{info.height}, "
+                f"expected {self.REQUIRED_WIDTH}x{self.REQUIRED_HEIGHT}",
+            )
+
+        if info.codec != self.REQUIRED_CODEC:
+            return GateResult(
+                False, "hard_fail",
+                f"Wrong codec: {info.codec}, expected {self.REQUIRED_CODEC}",
+            )
+
+        if info.duration is None:
+            return GateResult(
+                False, "hard_fail",
+                "Video duration unknown — cannot validate",
+            )
+
+        if info.duration < self.MIN_DURATION:
+            return GateResult(
+                False, "hard_fail",
+                f"Video too short: {info.duration:.1f}s, "
+                f"minimum {self.MIN_DURATION}s",
+            )
+
+        if info.duration > self.MAX_DURATION:
+            return GateResult(
+                False, "hard_fail",
+                f"Video too long: {info.duration:.1f}s, "
+                f"maximum {self.MAX_DURATION}s",
+            )
+
+        if not info.has_audio:
+            return GateResult(
+                False, "hard_fail",
+                "No audio track found",
+            )
+
         return GateResult(True, "pass", "Video valid")

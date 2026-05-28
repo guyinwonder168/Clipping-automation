@@ -30,6 +30,22 @@ Project-specific instructions for AI agents working in this repository.
 - Always quote paths when needed.
 - Prefer setting the command working directory instead of using `cd` in commands.
 
+## Security Lesson: Sonar pythonsecurity:S6549 Filesystem Oracle / Path Traversal
+
+Phase 14 hit a difficult SonarCloud `pythonsecurity:S6549` issue: “Change this code to not construct the path from user-controlled data.” Treat this as a design problem, not a warning to suppress.
+
+What failed:
+- ❌ `# NOSONAR` suppression — hides the warning but does not fix the vulnerability.
+- ❌ `os.path.realpath()`, `os.path.abspath()`, `os.path.normpath()`, and `os.path.isfile()` around a caller-provided path — safer at runtime, but Sonar still sees user-controlled data reaching filesystem sinks.
+- ❌ Passing dynamic `video_path` into validation/probing helpers, even when wrapped by a sandbox helper — still looked like tainted input reaching file I/O.
+
+What succeeded:
+- ✅ Follow OWASP path traversal guidance: prefer no user input for filesystem calls; use known-good application-owned paths.
+- ✅ Use fixed contract paths for pipeline artifacts. For final packaging, Composer owns `output_dir/job_{job_id}/video.mp4`; Packager validates/probes that path only and does not open arbitrary caller-provided video paths.
+- ✅ For unavoidable relative artifact paths, use `pathlib.Path.resolve()` plus `relative_to()` containment in `clipper_agency/core/safe_paths.py`, then pass the resolved path to shell-free subprocess calls.
+- ✅ Add regression tests proving outside paths are ignored/rejected and fixed job-owned paths are used.
+- ✅ Re-run full offline tests and wait for both GitHub `SonarCloud` and `SonarCloud Code Analysis` checks to pass before merging.
+
 ## Git Branching & PR Workflow
 
 **Never push directly to `master`.** Every phase of work must go through a branch + PR + SonarCloud gate.

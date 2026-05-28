@@ -113,6 +113,25 @@ def mock_packager_output():
     }
 
 
+@pytest.fixture
+def mock_probe_video_ok(mocker):
+    """Mock probe_video to return valid 1080x1920 h264 video info."""
+    class MockVideoInfo:
+        width = 1080
+        height = 1920
+        codec = "h264"
+        pix_fmt = "yuv420p"
+        duration = 30.0
+        has_audio = True
+        file_size = 1000000
+
+    mocker.patch(
+        "clipper_agency.orchestrator.gates.probe_video",
+        return_value=MockVideoInfo(),
+    )
+
+
+@pytest.mark.usefixtures("mock_probe_video_ok")
 class TestOrchestratorRunPipeline:
     """Tests for Orchestrator.run_pipeline()."""
 
@@ -958,6 +977,7 @@ class TestOrchestratorRunPipeline:
 # ── Phase 13: Config snapshot persistence ────────────────────────
 
 
+@pytest.mark.usefixtures("mock_probe_video_ok")
 class TestConfigSnapshot:
     """Tests for config snapshot persistence in pipeline runs."""
 
@@ -1031,6 +1051,7 @@ class TestConfigSnapshot:
         assert manifest["config_snapshot"]["niche"] == "test_niche"
 
 
+@pytest.mark.usefixtures("mock_probe_video_ok")
 class TestRunPipelineFrom:
     """Tests for retry/resume pipeline execution from a specific agent."""
 
