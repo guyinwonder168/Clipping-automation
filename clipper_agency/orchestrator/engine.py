@@ -512,6 +512,22 @@ class Orchestrator:
         safety_rules = ["no_defamation", "mark_rumors_as_unconfirmed"]
 
         try:
+            # Stage: Safety
+            if from_idx <= PIPELINE_ORDER.index("safety"):
+                mark_agent_running(conn, job_id, "safety")
+                safety_result = self._run_safety(
+                    job_id=job_id, topic=topic, assets_cache=assets_cache,
+                )
+                if safety_result.get("status") == "hard_fail":
+                    reason = safety_result.get("reason", "Safety failed")
+                    mark_agent_failed(conn, job_id, "safety", reason)
+                    update_job_status(conn, job_id, "FAILED", reason)
+                    return {
+                        "status": "failed", "failed_at": "safety",
+                        "reason": reason, "job_id": job_id,
+                    }
+                self._complete_agent(conn, assets_cache, job_id, "safety")
+
             # Stage: Research (researcher + gates G3-G5)
             if from_idx <= PIPELINE_ORDER.index("researcher"):
                 research_result = self._stage_research(

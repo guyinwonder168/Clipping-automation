@@ -49,7 +49,7 @@ def validate_research_brief(path: Path | str) -> ValidationResult:
 
 
 def validate_script(path: Path | str) -> ValidationResult:
-    """Validate script.json: valid JSON with scenes list."""
+    """Validate script.json: valid JSON with non-empty scenes list."""
     p = Path(path)
     if not p.exists():
         return ValidationResult(False, [f"script not found: {p}"])
@@ -57,9 +57,17 @@ def validate_script(path: Path | str) -> ValidationResult:
         data = read_json(p)
     except (ValueError, OSError) as e:
         return ValidationResult(False, [f"script JSON parse error: {e}"])
-    if "scenes" not in data:
+
+    if isinstance(data, list):
+        scenes = data
+    elif isinstance(data, dict):
+        if "scenes" not in data:
+            return ValidationResult(False, ["missing 'scenes' key"])
+        scenes = data["scenes"]
+    else:
         return ValidationResult(False, ["missing 'scenes' key"])
-    if not isinstance(data["scenes"], list) or len(data["scenes"]) == 0:
+
+    if not isinstance(scenes, list) or len(scenes) == 0:
         return ValidationResult(False, ["scenes list is empty"])
     return ValidationResult(True)
 

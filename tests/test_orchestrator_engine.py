@@ -1145,6 +1145,44 @@ class TestRunPipelineFrom:
         mock_safety.assert_not_called()
         mock_researcher.assert_called_once()
 
+    def test_retry_from_safety_reruns_safety(self, db_initialized, tmp_path):
+        """run_pipeline_from('safety') should run safety on the existing job."""
+        ac = str(tmp_path / "cache")
+        od = str(tmp_path / "outputs")
+        job_id = self._setup_completed_job(
+            db_initialized, ac, od,
+            completed_agents=[],
+        )
+        orch = Orchestrator(db_path=db_initialized)
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety, \
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher, \
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_voice_producer") as mock_vp, \
+             patch.object(Orchestrator, "_run_visual_director") as mock_vd, \
+             patch.object(Orchestrator, "_run_composer") as mock_comp, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": [{"url": "https://a.com", "title": "S1"}]}
+            mock_sw.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_vp.return_value = {"status": "completed", "audio_files": []}
+            mock_vd.return_value = {"status": "completed", "assets": []}
+            mock_comp.return_value = {"status": "completed", "video_path": str(video), "thumbnail_path": ""}
+            mock_rev.return_value = {"status": "pass", "score": 80, "feedback": "ok", "issues": []}
+            mock_pkg.return_value = {"status": "completed", "output_dir": "/tmp", "video_path": "", "caption_path": "", "thumbnail_path": "", "metadata_path": ""}
+
+            result = orch.run_pipeline_from(job_id, from_agent="safety")
+
+        assert result["status"] == "completed"
+        mock_safety.assert_called_once()
+        state = get_connection(db_initialized).execute(
+            "SELECT state FROM agent_states WHERE job_id = ? AND agent_name = ?",
+            (job_id, "safety"),
+        ).fetchone()
+        assert state["state"] == "completed"
+
     def test_retry_from_composer_reconstructs_all_upstream(self, db_initialized, tmp_path):
         """run_pipeline_from('composer') loads all upstream outputs from artifacts."""
         ac = str(tmp_path / "cache")
@@ -1270,7 +1308,7 @@ class TestRunPipelineFrom:
         sw_dir = Path(ac) / f"job_{job_id}" / "agents" / "scriptwriter"
         sw_dir.mkdir(parents=True, exist_ok=True)
         (sw_dir / "script.json").write_text(json.dumps(
-            {"scenes": [{"scene": 1, "text": "Halo!"}]}))
+            [{"scene": 1, "text": "Halo!"}]))
         # Write valid voice producer artifacts
         vp_dir = Path(ac) / f"job_{job_id}" / "agents" / "voice_producer" / "voices"
         vp_dir.mkdir(parents=True, exist_ok=True)

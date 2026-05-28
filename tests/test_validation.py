@@ -106,7 +106,16 @@ class TestValidateScript:
     """Tests for script.json validation."""
 
     def test_valid_script(self, tmp_path: Path):
-        """Valid script with scenes and text should pass."""
+        """Valid script scene list should pass."""
+        script = [{"scene": 1, "text": "Hello world"}]
+        path = tmp_path / "script.json"
+        path.write_text(json.dumps(script))
+
+        result = validate_script(path)
+        assert result.passed is True
+
+    def test_valid_legacy_script_object(self, tmp_path: Path):
+        """Legacy script object with scenes should still pass."""
         script = {
             "scenes": [{"scene": 1, "text": "Hello world"}],
             "text": "Hello world",
@@ -130,6 +139,15 @@ class TestValidateScript:
 
     def test_empty_scenes(self, tmp_path: Path):
         """Script with empty scenes list should fail."""
+        script = []
+        path = tmp_path / "script.json"
+        path.write_text(json.dumps(script))
+
+        result = validate_script(path)
+        assert result.passed is False
+
+    def test_empty_legacy_scenes(self, tmp_path: Path):
+        """Legacy script object with empty scenes should fail."""
         script = {"scenes": [], "text": "", "caption": ""}
         path = tmp_path / "script.json"
         path.write_text(json.dumps(script))
@@ -268,9 +286,7 @@ class TestValidateAgentCache:
         cache = self._cache_root(tmp_path)
         agent = Path(cache) / "job_1" / "agents" / "scriptwriter"
         _write_json(agent / "output.json", {"status": "completed"})
-        _write_json(agent / "script.json", {
-            "scenes": [{"scene": 1, "text": "Hello"}],
-        })
+        _write_json(agent / "script.json", [{"scene": 1, "text": "Hello"}])
         result = validate_agent_cache(cache, 1, "scriptwriter")
         assert result.passed is True
 
@@ -279,7 +295,7 @@ class TestValidateAgentCache:
         cache = self._cache_root(tmp_path)
         agent = Path(cache) / "job_1" / "agents" / "scriptwriter"
         _write_json(agent / "output.json", {"status": "completed"})
-        _write_json(agent / "script.json", {"scenes": []})
+        _write_json(agent / "script.json", [])
         result = validate_agent_cache(cache, 1, "scriptwriter")
         assert result.passed is False
 
