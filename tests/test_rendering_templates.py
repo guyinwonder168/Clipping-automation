@@ -148,3 +148,17 @@ def test_load_render_template_invalid_yaml_syntax_raises(tmp_path):
 
     with pytest.raises(TemplateLoadError, match="Invalid template broken"):
         load_render_template("broken", tmp_path)
+
+
+def test_load_render_template_rejects_invalid_transition_type(tmp_path):
+    """Unsupported transition type raises TemplateLoadError."""
+    yaml_file = tmp_path / "bad_transition.yaml"
+    yaml_file.write_text(
+        "name: bad_transition\n"
+        "type: test\n"
+        "transitions:\n"
+        "  type: fdae\n"
+    )
+
+    with pytest.raises(TemplateLoadError, match="Invalid template bad_transition"):
+        load_render_template("bad_transition", tmp_path)

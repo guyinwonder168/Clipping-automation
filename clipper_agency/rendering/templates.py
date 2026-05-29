@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError
@@ -34,7 +35,7 @@ class TemplateLayout(BaseModel):
 class TemplateTransition(BaseModel):
     """Transition configuration for a rendering template."""
 
-    type: str = "cut"
+    type: Literal["cut", "fade", "crossfade"] = "cut"
     duration: str = "0s"
 
 
