@@ -102,7 +102,10 @@ def _build_ffmpeg_args(plan: RenderPlan, output_path: Path) -> list[str]:
         video_output_label = "outv"
 
     # ── Silent audio ──
-    filter_parts.append("anullsrc[outa]")
+    total_duration = sum(scene.duration_seconds for scene in scenes)
+    filter_parts.append(
+        f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={total_duration}[outa]"
+    )
 
     filter_graph = ";".join(filter_parts)
 

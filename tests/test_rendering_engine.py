@@ -1,5 +1,6 @@
 """Tests for clipper_agency.rendering.engine — standalone FFmpeg render engine."""
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -18,6 +19,10 @@ from clipper_agency.rendering.engine import (
     _build_ffmpeg_args,
     render_plan,
 )
+from clipper_agency.rendering.templates import load_render_template
+
+ffmpeg_available = shutil.which("ffmpeg") is not None
+ffmpeg_skip = pytest.mark.skipif(not ffmpeg_available, reason="FFmpeg not installed")
 
 # ---------------------------------------------------------------------------
 # _build_drawtext
@@ -307,3 +312,134 @@ def test_render_plan_raises_on_ffmpeg_failure(tmp_path, monkeypatch):
     assert stderr_log.exists()
     content = stderr_log.read_text()
     assert "FFmpeg error" in content
+
+
+# ---------------------------------------------------------------------------
+# Fixture tests — full end-to-end render per template (requires FFmpeg)
+# ---------------------------------------------------------------------------
+
+
+def _make_test_source(tmp_path: Path, name: str, color: str = "blue") -> Path:
+    """Generate a 1‑second 1080×1920 synthetic MP4 clip under *tmp_path*."""
+    source = tmp_path / name
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", f"color=c={color}:s=1080x1920:d=1",
+            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            str(source),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+    return source
+
+
+@ffmpeg_skip
+def test_standalone_renderer_news_card(tmp_path):
+    """Full render: news_card adapter → engine → valid video + thumbnail."""
+    source = _make_test_source(tmp_path, "src_news.mp4")
+
+    template = load_render_template("news_card")
+    from clipper_agency.rendering.renderers.news_card import build_news_card_plan
+
+    output = tmp_path / "outputs" / "video.mp4"
+    diagnostics = tmp_path / "diagnostics"
+    plan = build_news_card_plan(
+        template=template,
+        source_paths=[source],
+        caption="Breaking news hari ini dari dunia hiburan",
+        title="News Card Test",
+        diagnostics_dir=diagnostics,
+    )
+
+    result = render_plan(plan, output, diagnostics)
+    assert result.video_path == str(output)
+    assert output.is_file()
+    assert output.stat().st_size > 0
+
+    thumbnail = Path(result.thumbnail_path)
+    assert thumbnail.is_file()
+    assert thumbnail.stat().st_size > 0
+
+    # Probe output
+    from clipper_agency.core.media_probe import probe_video
+
+    info = probe_video(output, output.parent)
+    assert info is not None
+    assert info.width == 1080
+    assert info.height == 1920
+    assert info.duration is not None
+
+    # Diagnostics
+    assert (diagnostics / "render_plan.json").is_file()
+    assert (diagnostics / "ffmpeg_command.txt").is_file()
+
+
+@ffmpeg_skip
+def test_standalone_renderer_b_roll_narration(tmp_path):
+    """Full render: b_roll_narration adapter → engine → valid video + thumbnail."""
+    src1 = _make_test_source(tmp_path, "src_brn_clip1.mp4", "green")
+    src2 = _make_test_source(tmp_path, "src_brn_clip2.mp4", "red")
+
+    template = load_render_template("b_roll_narration")
+    from clipper_agency.rendering.renderers.b_roll_narration import (
+        build_b_roll_narration_plan,
+    )
+
+    output = tmp_path / "outputs" / "video.mp4"
+    diagnostics = tmp_path / "diagnostics"
+    plan = build_b_roll_narration_plan(
+        template=template,
+        source_paths=[src1, src2],
+        caption="Cerita panjang untuk dua klip b roll",
+        title="B-Roll Narration Test",
+        diagnostics_dir=diagnostics,
+    )
+
+    result = render_plan(plan, output, diagnostics)
+    assert result.video_path == str(output)
+    assert output.is_file()
+    assert output.stat().st_size > 0
+
+    from clipper_agency.core.media_probe import probe_video
+
+    info = probe_video(output, output.parent)
+    assert info is not None
+    assert info.width == 1080
+    assert info.height == 1920
+
+
+@ffmpeg_skip
+def test_standalone_renderer_rapid_update(tmp_path):
+    """Full render: rapid_update adapter → engine → valid video + thumbnail."""
+    source = _make_test_source(tmp_path, "src_rapid.mp4", "black")
+
+    template = load_render_template("rapid_update")
+    from clipper_agency.rendering.renderers.rapid_update import build_rapid_update_plan
+
+    output = tmp_path / "outputs" / "video.mp4"
+    diagnostics = tmp_path / "diagnostics"
+    plan = build_rapid_update_plan(
+        template=template,
+        source_paths=[source],
+        caption="Gosip terbaru artis indonesia hot banget",
+        title="Rapid Update Test",
+        diagnostics_dir=diagnostics,
+    )
+
+    result = render_plan(plan, output, diagnostics)
+    assert result.video_path == str(output)
+    assert output.is_file()
+    assert output.stat().st_size > 0
+
+    from clipper_agency.core.media_probe import probe_video
+
+    info = probe_video(output, output.parent)
+    assert info is not None
+    assert info.width == 1080
+    assert info.height == 1920
+
+    # Rapid Update should have drawtext captions in filter
+    cmd_text = (diagnostics / "ffmpeg_command.txt").read_text()
+    assert "drawtext" in cmd_text
