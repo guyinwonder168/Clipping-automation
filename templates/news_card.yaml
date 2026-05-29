@@ -8,6 +8,6 @@ layout:
   title_font_size: 56
   subtitle_font_size: 32
   caption_position: bottom
-  transitions:
-    type: fade
-    duration: 0.5s
+transitions:
+  type: fade
+  duration: 0.5s
