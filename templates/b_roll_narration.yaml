@@ -6,6 +6,6 @@ layout:
   resolution: 1080x1920
   clip_duration: 3-5s
   caption_style: dynamic
-  transitions:
-    type: crossfade
-    duration: 0.3s
+transitions:
+  type: crossfade
+  duration: 0.3s
