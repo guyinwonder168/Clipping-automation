@@ -3,6 +3,7 @@
 import json
 import logging
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from clipper_agency.agents.composer import ComposerAgent
@@ -433,19 +434,26 @@ class Orchestrator:
     ) -> dict[str, Any]:
         """Run Visual Director agent: sources → visual output → complete."""
         mark_agent_running(conn, job_id, "visual_director")
-        sources_data = research_output.get("sources", {})
-        if isinstance(sources_data, dict):
-            research_sources = sources_data.get("sources", [])
-        elif isinstance(sources_data, list):
-            research_sources = sources_data
-        else:
-            research_sources = []
-        source_urls = [s["url"] for s in research_sources
-                       if isinstance(s, dict) and s.get("url")]
+
+        # Pass research paths — let Visual Director decide what's useful
+        research_contract_path = ""
+        research_brief_path = ""
+        if assets_cache:
+            from clipper_agency.core.paths import agent_dir as get_agent_dir
+            rd = get_agent_dir(assets_cache, job_id, "researcher")
+            cp = Path(rd) / "research_contract.json"
+            bp = Path(rd) / "research_brief.md"
+            if cp.exists():
+                research_contract_path = str(cp)
+            if bp.exists():
+                research_brief_path = str(bp)
+
         visual_output = self._run_visual_director(
             job_id=job_id, script=script_output.get("script", []),
-            topic=topic, source_urls=source_urls,
+            topic=topic,
             output_dir=output_dir, assets_cache=assets_cache,
+            research_contract_path=research_contract_path,
+            research_brief_path=research_brief_path,
         )
         if visual_output.get("status") != "failed":
             self._complete_agent(conn, assets_cache, job_id, "visual_director")
