@@ -81,3 +81,37 @@ class PexelsService:
             return str(path)
         except Exception:
             return None
+
+    def search_photos(
+        self, query: str, per_page: int = 5
+    ) -> list[dict[str, Any]]:
+        """Search for stock photos matching the query.
+
+        Returns:
+            List of photo metadata dicts with id and src URLs.
+        """
+        if not self.api_key:
+            raise ValueError("PEXELS_API_KEY not set")
+
+        logger.info("Pexels: searching photos (per_page=%d)", per_page)
+        with httpx.Client(base_url=self.BASE_URL) as client:
+            resp = client.get(
+                "/search",
+                headers={"Authorization": self.api_key},
+                params={
+                    "query": query,
+                    "per_page": per_page,
+                    "orientation": "portrait",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            photos = data.get("photos", [])
+            logger.info("Pexels: found %d photos", len(photos))
+            return [
+                {
+                    "id": p["id"],
+                    "src": p.get("src", {}),
+                }
+                for p in photos
+            ]

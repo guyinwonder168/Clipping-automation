@@ -70,3 +70,38 @@ def test_download_video_handles_http_error(mock_httpx):
     svc = PexelsService()
     result = svc.download_video("https://broken.example.com/video.mp4", "/tmp", "test.mp4")
     assert result is None
+
+
+class TestPexelsPhotoSearch:
+    """Photo search method for text card images."""
+
+    def test_search_photos_returns_list(self):
+        """search_photos returns list of photo dicts with id and src."""
+        service = PexelsService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "photos": [
+                {"id": 1, "src": {"medium": "https://images.pexels.com/1.jpg"}},
+                {"id": 2, "src": {"medium": "https://images.pexels.com/2.jpg"}},
+            ]
+        }
+        with patch.object(service, "api_key", "test-key"):
+            with patch("clipper_agency.services.pexels.httpx.Client") as MockClient:
+                mock_client = MagicMock()
+                mock_client.get.return_value = mock_resp
+                MockClient.return_value.__enter__ = lambda s: mock_client
+                MockClient.return_value.__exit__ = MagicMock(return_value=False)
+                result = service.search_photos("courtroom", per_page=3)
+
+        assert len(result) == 2
+        assert result[0]["id"] == 1
+        assert "src" in result[0]
+
+    def test_search_photos_raises_without_api_key(self):
+        """search_photos raises ValueError if PEXELS_API_KEY not set."""
+        service = PexelsService()
+        service.api_key = None
+        with pytest.raises(ValueError, match="PEXELS_API_KEY"):
+            service.search_photos("test")
