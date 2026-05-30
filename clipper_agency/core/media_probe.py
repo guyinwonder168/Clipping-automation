@@ -21,6 +21,7 @@ class VideoInfo:
     duration: float | None
     has_audio: bool = False
     file_size: int = 0
+    sample_aspect_ratio: str = "1:1"
 
 
 def probe_video(
@@ -72,6 +73,11 @@ def probe_video(
     codec = video_stream.get("codec_name", "unknown")
     pix_fmt = video_stream.get("pix_fmt", "unknown")
 
+    # --- sample aspect ratio ---
+    sar_raw = video_stream.get("sample_aspect_ratio", "1:1")
+    if not sar_raw or sar_raw == "0:1":
+        sar_raw = "1:1"
+
     # --- audio stream ---
     has_audio = _find_stream(streams, "audio") is not None
 
@@ -98,6 +104,7 @@ def probe_video(
         duration=duration,
         has_audio=has_audio,
         file_size=file_size,
+        sample_aspect_ratio=sar_raw,
     )
 
 

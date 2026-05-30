@@ -35,10 +35,12 @@ class SceneNormalizer:
             from clipper_agency.core.media_probe import probe_video
 
             info = probe_video(input_path, Path(input_path).parent)
+            sar_ok = info.sample_aspect_ratio == "1:1"
             if (
                 info
                 and info.width == self.TARGET_WIDTH
                 and info.height == self.TARGET_HEIGHT
+                and sar_ok
             ):
                 return NormalizeResult(path=input_path, success=True)
         except Exception:

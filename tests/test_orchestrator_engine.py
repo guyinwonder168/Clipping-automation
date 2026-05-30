@@ -482,6 +482,43 @@ class TestOrchestratorRunPipeline:
         mock_reviewer.assert_not_called()
         mock_pkg.assert_not_called()
 
+    def test_voice_producer_failure_aborts_pipeline(self, db_initialized):
+        """If voice_producer returns status='failed', pipeline must abort at
+        voice_producer stage — not advance to G8 or Composer."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch.object(Orchestrator, "_run_safety") as mock_safety,\
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher,\
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_scriptwriter,\
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice,\
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual,\
+             patch.object(Orchestrator, "_run_composer") as mock_composer,\
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer,\
+             patch.object(Orchestrator, "_package_output") as mock_pkg:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {"status": "completed", "research_brief": "ok", "sources": ["https://a.com", "https://b.com"]}
+            mock_scriptwriter.return_value = {"status": "completed", "script": [], "caption": "", "hashtags": [], "estimated_duration": 0}
+            mock_voice.return_value = {"status": "failed", "error": "All TTS providers failed", "audio_files": []}
+            mock_visual.return_value = {}
+            mock_composer.return_value = {}
+            mock_reviewer.return_value = {}
+            mock_pkg.return_value = {}
+
+            result = orch.run_pipeline(topic="Test", niche="test_niche")
+
+        assert result["status"] == "failed"
+        assert result["failed_at"] == "voice_producer"
+        assert "All TTS providers failed" in result.get("reason", "")
+        # Visual Director and downstream should NOT have been called
+        mock_visual.assert_not_called()
+        mock_composer.assert_not_called()
+        mock_reviewer.assert_not_called()
+        # Job should be FAILED in DB
+        conn = get_connection(db_initialized)
+        job = conn.execute(
+            "SELECT status FROM jobs WHERE id = ?", (result["job_id"],),
+        ).fetchone()
+        assert job["status"] == "FAILED"
+
     def test_default_output_dir(self, db_initialized, tmp_path):
         """Orchestrator should default output_dir to 'outputs'."""
         orch = Orchestrator(db_path=db_initialized)
