@@ -5,7 +5,7 @@ Project-specific instructions for AI agents working in this repository.
 ## Repository State
 
 - **Greenfield project** — early implementation phase (Phases 0-15a complete).
-- All 563 offline tests pass (2 pre-existing `integration`-marked tests deselected — `test_full_pipeline_smoke` requires FFmpeg + paid API keys, 1 other requires API keys). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI + configurable TTS provider (ElevenLabs/Gemini TTS/Fish Audio fallback) + artifact workspace contract + job debug dashboard/CLI + job manifest + gated pipeline hard-fail enforcement + agent state DB transitions + retry/resume/cache-reuse via dashboard/CLI + CSRF-protected retry/resume routes + FFmpeg preflight diagnostics + media probing + scene validation/normalization + clip provenance tracking + generated card fallback (Pillow) + G10 deterministic validation + fixed-contract packager (S6549 safe) + template-driven rendering engine (YAML templates, 3 adapters, FFmpeg filter chains with fade/crossfade transitions, drawtext captions, Pillow thumbnails).
+- All 568 offline tests pass (2 pre-existing `integration`-marked tests deselected — `test_full_pipeline_smoke` requires FFmpeg + paid API keys, 1 other requires API keys). 7 agents built + Orchestrator engine + CLI interface + Web dashboard + data-driven config/prompt files + Docker deployment + pydantic-settings .env config system + structured logging + per-agent model config + test-agent CLI + configurable TTS provider (ElevenLabs/Gemini TTS/Fish Audio fallback) + artifact workspace contract + job debug dashboard/CLI + job manifest + gated pipeline hard-fail enforcement + agent state DB transitions + retry/resume/cache-reuse via dashboard/CLI + CSRF-protected retry/resume routes + FFmpeg preflight diagnostics + media probing + scene validation/normalization + clip provenance tracking + generated card fallback (Pillow) + G10 deterministic validation + fixed-contract packager (S6549 safe) + template-driven rendering engine (YAML templates, 3 adapters, FFmpeg filter chains with fade/crossfade transitions, drawtext captions, Pillow thumbnails) + Composer template routing with diagnostics.
 
 ## Python Commands
 
@@ -185,7 +185,7 @@ Once code exists:
 - Integration tests require: FFmpeg 5.0+, SQLite, API keys for OpenRouter/ElevenLabs/Pexels/ScrapeCreators/Firecrawl.
 - Tests that call external APIs must use `pytest` markers to allow offline runs:
   ```bash
-  .venv/bin/python3 -m pytest -m "not external and not integration" -q  # skip API-dependent + integration tests (385 pass, 2 deselected)
+  .venv/bin/python3 -m pytest -m "not external and not integration" -q  # skip API-dependent + integration tests (568 pass, 2 deselected)
   ```
 
 ## Niche & Template Config
