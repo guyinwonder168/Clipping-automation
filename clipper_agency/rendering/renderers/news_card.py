@@ -16,6 +16,7 @@ from clipper_agency.rendering.contracts import (
 )
 from clipper_agency.rendering.primitives import (
     make_caption_overlays,
+    transition_duration_for_template,
     transition_for_template,
 )
 from clipper_agency.rendering.templates import RenderTemplateConfig
@@ -50,6 +51,7 @@ def build_news_card_plan(
         Fully populated ``RenderPlan`` ready for the render engine.
     """
     transition = transition_for_template(template)
+    transition_dur = transition_duration_for_template(template)
     position = template.layout.caption_position or "bottom"
     style = template.layout.caption_style or "default"
 
@@ -67,6 +69,7 @@ def build_news_card_plan(
                 duration_seconds=_DEFAULT_CLIP_DURATION,
                 captions=caption_overlays,
                 transition=transition,
+                transition_duration_seconds=transition_dur,
             )
         )
 

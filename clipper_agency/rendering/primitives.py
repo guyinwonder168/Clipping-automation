@@ -106,3 +106,22 @@ def transition_for_template(template: RenderTemplateConfig) -> str:
         Transition type string (e.g. ``"fade"``, ``"crossfade"``, ``"cut"``).
     """
     return template.transitions.type
+
+
+def transition_duration_for_template(template: RenderTemplateConfig) -> float:
+    """Return transition duration in seconds from *template* configuration.
+
+    Handles duration strings like ``"0.5s"``, ``"0.3s"``, ``"0s"``.
+
+    Args:
+        template: A validated ``RenderTemplateConfig``.
+
+    Returns:
+        Duration as a ``float`` in seconds (always >= 0).
+    """
+    dur_str = template.transitions.duration
+    if isinstance(dur_str, (int, float)):
+        return float(dur_str)
+    if dur_str.endswith("s"):
+        return float(dur_str[:-1])
+    return float(dur_str)

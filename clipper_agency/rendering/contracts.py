@@ -73,6 +73,7 @@ class RenderScene(BaseModel):
     captions: list[CaptionOverlay] = Field(default_factory=list)
     overlays: list[VisualOverlay] = Field(default_factory=list)
     transition: str = "cut"
+    transition_duration_seconds: float = Field(default=0.0, ge=0)
 
 
 class ThumbnailConfig(BaseModel):
