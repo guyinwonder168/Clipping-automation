@@ -1,8 +1,8 @@
 # Clipper Agency — Requirements Traceability Matrix
 
-**Version:** 2.5
-**Date:** 2026-05-28
-**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
+**Version:** 2.6
+**Date:** 2026-05-30
+**Status:** MVP Phase 15a Complete — Template Rendering Engine Integrated
 
 ---
 
@@ -151,6 +151,20 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 94 | Output package fixed-contract nomenclature ensures `video.mp4`, not `final.mp4`; packager uses OWASP-safe path sandbox (S6549) | PRD §4, Design §1, Design §13 |
 | 95 | Thumbnail generated as 1080x1920 PNG using Pillow with template-based styling, included in final package as `thumbnail.png` | PRD §4, Design §13 |
 
+### From Phase 15a Template Rendering Engine
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 96 | YAML template definitions under `templates/` drive rendering; 3 built-in templates: News Card, B-Roll Narration, Rapid Update | PRD §5 PR-07, SRS §2 FR-21, Design §10 |
+| 97 | `TemplateLoader` validates template YAML at load time (required fields, type checks, default values) — fails fast before any FFmpeg work | Design §10, Design §13 |
+| 98 | Render contracts (`RenderContract`, `ClipSpec`, `AudioTrack`, `TextOverlay`, `TransitionSpec`) define typed inputs for every adapter | Design §7, Design §13 |
+| 99 | Shared rendering primitives (`build_concat_filter`, `build_audio_mix`, `build_fade`, `build_crossfade`, `build_drawtext`) produce FFmpeg filter chains | Design §7, Design §13 |
+| 100 | Template thumbnails generated via Pillow with title text, template-specific styling, and 1080x1920 output — replaces generic thumbnail when template selected | PRD §4, Design §13 |
+| 101 | `RenderEngine` orchestrates FFmpeg filter graph from primitives + adapter output; produces intermediate and final video via two-pass concat + overlay | Design §7, Design §13 |
+| 102 | Three adapters (`NewsCardRenderer`, `BRollNarrationRenderer`, `RapidUpdateRenderer`) translate template specs into `RenderContract` + filter chains | Design §10, Design §13 |
+| 103 | Composer agent routes template selection by niche config and script structure; runs FFmpeg preflight diagnostics before rendering | Design §4, Design §7, Design §13 |
+| 104 | All rendering tests offline: template loading, contract validation, primitive filter chains, thumbnail generation, adapter output, engine orchestration, composer template routing | SRS §3 NFR-09, Design §13 |
+
 ---
 
 ## Requirements Traceability Matrix
@@ -163,7 +177,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | PR-02 | FR-01..FR-14 | §3, §4 | G1-G10 | See edge case catalog below | Gate definitions |
 | PR-03 | FR-17 | §13 Dashboard | N/A | Dashboard unavailable | N/A |
 | PR-04 | FR-18 | §13 CLI | N/A | Invalid CLI args | N/A |
-| PR-05 | FR-10 | §3, §13 Output | G10 | Missing file, wrong format | Deterministic check |
+| PR-05 | FR-10 | §3, §13 Output | G10 | Missing file, wrong format | Deterministic check — **Phase 15a**: `clipper_agency/rendering/engine.py` produces video via template-driven rendering; `clipper_agency/rendering/thumbnails.py` generates thumbnail; tests: `tests/test_rendering_engine.py`, `tests/test_rendering_thumbnails.py` |
 | PR-06 | FR-27 | §9 Config | N/A | Invalid config | Config validation |
 | PR-10 | FR-02 | §4 Safety, §3 G4 | G4 pre + post | See safety edge cases | G1 preflight + G4 |
 | PR-11 | FR-13 | §3 G2 | G2 | Zero credits | G2 estimate |
@@ -176,7 +190,7 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 
 | PRD ID | SRS ID | Design Section | Gate | Edge Cases | Validation |
 |--------|--------|---------------|------|------------|------------|
-| PR-07 | FR-21 | §10 Templates | N/A | Invalid template config | Config validation |
+| PR-07 | FR-21 | §10 Templates | N/A | Invalid template config | Config validation — **Phase 15a**: `clipper_agency/rendering/templates.py`, `clipper_agency/rendering/renderers/news_card.py`, `clipper_agency/rendering/renderers/b_roll_narration.py`, `clipper_agency/rendering/renderers/rapid_update.py`; tests: `tests/test_rendering_templates.py`, `tests/test_rendering_adapters.py` |
 | PR-08 | FR-20 | §9 Autonomy Levels | N/A | Invalid autonomy setting | Config validation |
 | PR-12 | SRS §5 | §9 Auth | N/A | Unauthorized access | Auth check |
 | PR-24 | FR-19 | §13 CLI | N/A | Invalid agent name | CLI validation |
@@ -381,3 +395,8 @@ Use this checklist to verify the documentation set is airtight. Any reviewer (hu
 | **Config Hierarchy** | Agent defaults → Niche → Account → Job-level overrides |
 | **Output Package** | Delivered artifacts: video.mp4 + caption.txt + thumbnail.png + metadata.json |
 | **Generated Cards** | Text-based PNG images (1080x1920) created by Visual Director as last-resort visual fallback |
+| **Template Loader** | YAML template parser and validator (`clipper_agency/rendering/templates.py`) — loads template definitions with required field validation |
+| **Render Contract** | Typed data model (`clipper_agency/rendering/contracts.py`) defining clips, audio, text overlays, and transitions for the FFmpeg engine |
+| **Render Engine** | FFmpeg filter graph orchestrator (`clipper_agency/rendering/engine.py`) — assembles primitives into a two-pass render pipeline |
+| **Rendering Primitives** | Shared FFmpeg filter chain builders (`clipper_agency/rendering/primitives.py`) — concat, fade, crossfade, drawtext, audio mix |
+| **Template Adapter** | Per-template renderer that translates YAML spec + scene data into a `RenderContract` (News Card, B-Roll, Rapid Update) |
