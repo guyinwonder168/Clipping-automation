@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 _COMPOSER_FAILED = "Composer failed"
 _PACKAGING_FAILED = "Packaging failed"
 _VOICE_GEN_FAILED = "Voice generation failed"
+_ASSET_SOURCING_FAILED = "Asset sourcing failed"
 
 
 class Orchestrator:
@@ -80,6 +81,23 @@ class Orchestrator:
         """Mark agent completed in DB and manifest."""
         mark_agent_completed(conn, job_id, agent_name)
         update_manifest_agent(assets_cache, job_id, agent_name, "completed")
+
+    def _fail_agent(
+        self, conn: Any, job_id: int, agent_name: str,
+        output: dict[str, Any], default_reason: str,
+    ) -> dict[str, Any]:
+        """Mark agent failed, update job, return failure dict."""
+        error = output.get("error", default_reason)
+        logger.error("%s FAILED: %s",
+                     agent_name.replace("_", " ").title(), error)
+        mark_agent_failed(conn, job_id, agent_name, error)
+        update_job_status(conn, job_id, "FAILED", error)
+        return {
+            "status": "failed",
+            "failed_at": agent_name,
+            "reason": error,
+            "job_id": job_id,
+        }
 
     def _enforce_gate(self, conn, job_id: int, gate_name: str,
                       result: GateResult,
@@ -215,16 +233,8 @@ class Orchestrator:
             output_dir=output_dir, assets_cache=assets_cache,
         )
         if voice_output.get("status") == "failed":
-            logger.error("Voice Producer FAILED: %s", voice_output.get("error"))
-            mark_agent_failed(conn, job_id, "voice_producer",
-                              voice_output.get("error", _VOICE_GEN_FAILED))
-            update_job_status(conn, job_id, "FAILED",
-                              voice_output.get("error", _VOICE_GEN_FAILED))
-            return {
-                "status": "failed", "failed_at": "voice_producer",
-                "reason": voice_output.get("error", _VOICE_GEN_FAILED),
-                "job_id": job_id,
-            }
+            return self._fail_agent(conn, job_id, "voice_producer",
+                                    voice_output, _VOICE_GEN_FAILED)
         self._complete_agent(conn, assets_cache, job_id, "voice_producer")
 
         g8 = GateAudioValidation()
@@ -255,20 +265,8 @@ class Orchestrator:
         )
 
         if visual_output.get("status") == "failed":
-            logger.error("Visual Director FAILED: %s",
-                         visual_output.get("error"))
-            mark_agent_failed(conn, job_id, "visual_director",
-                              visual_output.get("error",
-                                                "Asset sourcing failed"))
-            update_job_status(conn, job_id, "FAILED",
-                              visual_output.get("error",
-                                                "Asset sourcing failed"))
-            return {
-                "status": "failed", "failed_at": "visual_director",
-                "reason": visual_output.get("error",
-                                            "Asset sourcing failed"),
-                "job_id": job_id,
-            }
+            return self._fail_agent(conn, job_id, "visual_director",
+                                    visual_output, _ASSET_SOURCING_FAILED)
 
         g9 = GateAssetValidation()
         asset_paths = [a.get("path", "") for a in visual_output.get("assets", [])]
@@ -287,16 +285,8 @@ class Orchestrator:
         )
 
         if compose_output.get("status") == "failed":
-            logger.error("Composer FAILED: %s", compose_output.get("error"))
-            mark_agent_failed(conn, job_id, "composer",
-                               compose_output.get("error", _COMPOSER_FAILED))
-            update_job_status(conn, job_id, "FAILED",
-                               compose_output.get("error", _COMPOSER_FAILED))
-            return {
-                "status": "failed", "failed_at": "composer",
-                "reason": compose_output.get("error", _COMPOSER_FAILED),
-                "job_id": job_id,
-            }
+            return self._fail_agent(conn, job_id, "composer",
+                                    compose_output, _COMPOSER_FAILED)
         self._complete_agent(conn, assets_cache, job_id, "composer")
 
         g10 = GateVideoValidation()
@@ -479,16 +469,8 @@ class Orchestrator:
         )
 
         if compose_output.get("status") == "failed":
-            mark_agent_failed(conn, job_id, "composer",
-                              compose_output.get("error", _COMPOSER_FAILED))
-            update_job_status(
-                conn, job_id, "FAILED",
-                compose_output.get("error", _COMPOSER_FAILED))
-            return compose_output, {
-                "status": "failed", "failed_at": "composer",
-                "reason": compose_output.get("error", _COMPOSER_FAILED),
-                "job_id": job_id,
-            }
+            return compose_output, self._fail_agent(
+                conn, job_id, "composer", compose_output, _COMPOSER_FAILED)
         self._complete_agent(conn, assets_cache, job_id, "composer")
 
         g10 = GateVideoValidation()
@@ -630,20 +612,8 @@ class Orchestrator:
                 output_dir, assets_cache,
             )
             if visual_output.get("status") == "failed":
-                logger.error("Visual Director FAILED: %s",
-                             visual_output.get("error"))
-                mark_agent_failed(conn, job_id, "visual_director",
-                                  visual_output.get("error",
-                                                    "Asset sourcing failed"))
-                update_job_status(conn, job_id, "FAILED",
-                                  visual_output.get("error",
-                                                    "Asset sourcing failed"))
-                return {
-                    "status": "failed", "failed_at": "visual_director",
-                    "reason": visual_output.get("error",
-                                                "Asset sourcing failed"),
-                    "job_id": job_id,
-                }
+                return self._fail_agent(conn, job_id, "visual_director",
+                                        visual_output, _ASSET_SOURCING_FAILED)
 
         if from_idx <= PIPELINE_ORDER.index("composer"):
             compose_output, abort = self._retry_composer_stage(
