@@ -253,6 +253,22 @@ class Orchestrator:
             output_dir, assets_cache,
         )
 
+        if visual_output.get("status") == "failed":
+            logger.error("Visual Director FAILED: %s",
+                         visual_output.get("error"))
+            mark_agent_failed(conn, job_id, "visual_director",
+                              visual_output.get("error",
+                                                "Asset sourcing failed"))
+            update_job_status(conn, job_id, "FAILED",
+                              visual_output.get("error",
+                                                "Asset sourcing failed"))
+            return {
+                "status": "failed", "failed_at": "visual_director",
+                "reason": visual_output.get("error",
+                                            "Asset sourcing failed"),
+                "job_id": job_id,
+            }
+
         g9 = GateAssetValidation()
         asset_paths = [a.get("path", "") for a in visual_output.get("assets", [])]
         g9_result = g9.evaluate(asset_paths=asset_paths)
@@ -440,7 +456,8 @@ class Orchestrator:
             topic=topic, source_urls=source_urls,
             output_dir=output_dir, assets_cache=assets_cache,
         )
-        self._complete_agent(conn, assets_cache, job_id, "visual_director")
+        if visual_output.get("status") != "failed":
+            self._complete_agent(conn, assets_cache, job_id, "visual_director")
         return visual_output
 
     def _retry_composer_stage(
@@ -611,6 +628,21 @@ class Orchestrator:
                 conn, job_id, topic, research_output, script_output,
                 output_dir, assets_cache,
             )
+            if visual_output.get("status") == "failed":
+                logger.error("Visual Director FAILED: %s",
+                             visual_output.get("error"))
+                mark_agent_failed(conn, job_id, "visual_director",
+                                  visual_output.get("error",
+                                                    "Asset sourcing failed"))
+                update_job_status(conn, job_id, "FAILED",
+                                  visual_output.get("error",
+                                                    "Asset sourcing failed"))
+                return {
+                    "status": "failed", "failed_at": "visual_director",
+                    "reason": visual_output.get("error",
+                                                "Asset sourcing failed"),
+                    "job_id": job_id,
+                }
 
         if from_idx <= PIPELINE_ORDER.index("composer"):
             compose_output, abort = self._retry_composer_stage(
