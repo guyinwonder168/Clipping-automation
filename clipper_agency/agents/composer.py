@@ -181,6 +181,10 @@ class ComposerAgent(BaseAgent):
         else:
             diagnostics_dir = Path(output_dir) / f"job_{job_id}" / "diagnostics"
 
+        # Persist loaded template config for debugging
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        write_json(diagnostics_dir / "template_config.json", template.model_dump())
+
         plan = adapter(
             template=template,
             source_paths=source_paths,
@@ -197,6 +201,7 @@ class ComposerAgent(BaseAgent):
             "video_path": str(result.video_path),
             "thumbnail_path": str(result.thumbnail_path),
             "template_name": template_name,
+            "diagnostics_dir": str(diagnostics_dir),
         }
 
         if agent_dir:

@@ -670,3 +670,96 @@ class TestComposerAudioAssembly:
             assert pattern not in call_str.lower(), (
                 f"Forbidden audio pattern '{pattern}' found in ffmpeg args"
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Task 12: Persist Composer template diagnostics
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestComposerTemplateDiagnostics:
+    """Task 12: Composer persists template diagnostics in diagnostics_dir."""
+
+    def test_composer_persists_template_diagnostics(self, tmp_path, monkeypatch):
+        """Composer writes template_config.json and returns diagnostics_dir."""
+        # Mock subprocess for preflight
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.run",
+            lambda *args, **kwargs: type("R", (), {
+                "returncode": 0, "stdout": "ffmpeg version 5.1", "stderr": "",
+            })(),
+        )
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.check_output",
+            lambda *args, **kwargs: b"libx264\naac\nmp3",
+        )
+
+        captured = {}
+
+        def fake_render_plan(plan, output_path, diagnostics_dir):
+            """Simulate engine writing render_plan.json."""
+            captured["diagnostics_dir"] = diagnostics_dir
+            diagnostics_dir.mkdir(parents=True, exist_ok=True)
+            # Engine writes render_plan.json
+            (diagnostics_dir / "render_plan.json").write_text(
+                json.dumps({"template_name": plan.template_name})
+            )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake_video")
+            thumb = diagnostics_dir / "thumbnails" / "news_card.png"
+            thumb.parent.mkdir(parents=True, exist_ok=True)
+            thumb.write_bytes(b"fake_png")
+            return type("Result", (), {
+                "video_path": output_path,
+                "thumbnail_path": thumb,
+            })()
+
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.render_plan", fake_render_plan,
+        )
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        output_dir = tmp_path / "outputs"
+
+        result = ComposerAgent().execute(
+            job_id=42,
+            assets=[{"path": str(tmp_path / "clip.mp4"), "scene": 1}],
+            audio_files=[],
+            output_dir=str(output_dir),
+            assets_cache=str(cache_dir),
+            template_name="news_card",
+            caption="Test caption",
+        )
+
+        composer_dir = cache_dir / "job_42" / "agents" / "composer"
+
+        # render_plan.json — written by engine, verify composer path produces it
+        assert (composer_dir / "render_plan.json").exists(), (
+            "render_plan.json should exist in diagnostics_dir"
+        )
+
+        # template_config.json — NEW: written by composer
+        assert (composer_dir / "template_config.json").exists(), (
+            "template_config.json should exist in diagnostics_dir"
+        )
+        config = json.loads((composer_dir / "template_config.json").read_text())
+        assert config["name"] == "news_card"
+        assert config["type"] == "news_card"
+
+        # diagnostics_dir in result dict — NEW
+        assert result["diagnostics_dir"] == str(composer_dir), (
+            f"Expected diagnostics_dir={composer_dir}, got {result.get('diagnostics_dir')}"
+        )
+
+        # input.json — already written by existing flow
+        assert (composer_dir / "input.json").exists(), (
+            "input.json should exist in diagnostics_dir"
+        )
+
+        # output.json — already written by existing flow
+        assert (composer_dir / "output.json").exists(), (
+            "output.json should exist in diagnostics_dir"
+        )
+
+        assert result["status"] == "completed"
