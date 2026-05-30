@@ -450,7 +450,7 @@ class TestPlanWithLLM:
         assert plan[1]["action"]["type"] == "text_card"
 
     def test_plan_with_llm_falls_back_on_invalid_json(self, mocker):
-        """If LLM returns garbage, fall back to old _plan_scenes behavior."""
+        """If LLM returns garbage, _plan_with_llm returns None (caller handles fallback)."""
         import json
         agent = VisualDirectorAgent()
 
@@ -475,9 +475,8 @@ class TestPlanWithLLM:
 
         plan = agent._plan_with_llm(scenes, compact_data)
 
-        # Should fall back to sequential plan with pexels/none
-        assert len(plan) == 1
-        assert plan[0]["source"] in ("pexels", "none")
+        # Returns None so caller (_run_llm_planning) routes to _download_assets
+        assert plan is None
 
 
 class TestExecutePlan:

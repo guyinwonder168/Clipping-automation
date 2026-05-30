@@ -101,13 +101,21 @@ class VisualDirectorAgent(BaseAgent):
         compact_data = self._compact_research_data(
             research_contract_path, research_brief_path,
         )
-        plan = self._plan_with_llm(scenes, compact_data)
-        if agent_dir:
-            write_json(f"{agent_dir}/scene_plan.json", plan)
-
         scenes_dir = f"{agent_dir}/scenes" if agent_dir else f"{output_dir or 'outputs'}/job_{job_id}"
         Path(scenes_dir).mkdir(parents=True, exist_ok=True)
-        assets = self._execute_plan(plan, scenes_dir)
+
+        llm_plan = self._plan_with_llm(scenes, compact_data)
+
+        if llm_plan is not None:
+            plan = llm_plan
+            assets = self._execute_plan(plan, scenes_dir)
+        else:
+            urls = [v["url"] for v in compact_data.get("video_sources", [])]
+            plan = self._plan_scenes(scenes, urls, [])
+            assets = self._download_assets(plan, job_id, scenes_dir)
+
+        if agent_dir:
+            write_json(f"{agent_dir}/scene_plan.json", plan)
         return plan, assets
 
     def _run_legacy_planning(
@@ -213,8 +221,8 @@ class VisualDirectorAgent(BaseAgent):
 
     def _plan_with_llm(
         self, scenes: list[dict], compact_data: dict,
-    ) -> list[dict]:
-        """LLM plans per-scene visual strategy. Falls back to sequential."""
+    ) -> list[dict] | None:
+        """LLM plans per-scene visual strategy. Returns None on failure."""
         try:
             from clipper_agency.agents.prompts import PROMPTS_DIR, load_prompt
             from clipper_agency.config.loader import load_settings
@@ -257,9 +265,8 @@ class VisualDirectorAgent(BaseAgent):
             return parsed.get("scenes", [])
 
         except Exception as e:
-            logger.warning("LLM planning failed, falling back to sequential: %s", e)
-            urls = [v["url"] for v in compact_data.get("video_sources", [])]
-            return self._plan_scenes(scenes, urls, [])
+            logger.warning("LLM planning failed: %s", e)
+            return None
 
     def _plan_scenes(
         self,
