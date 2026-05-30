@@ -582,3 +582,64 @@ def test_xfade_transition_filter_chain(tmp_path):
     assert "offset=4.7" in filter_str  # d0 - xfade_dur = 5.0 - 0.3
     # Should have settb=AVTB normalisation
     assert "settb=AVTB" in filter_str
+
+
+def test_per_scene_transition_cut_xfade_cut(tmp_path):
+    """Per-scene transitions: cut→crossfade→cut should mix concat AND xfade."""
+    src1, src2, src3 = tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "c.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+    src3.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="test",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=3.0,
+                        transition="cut", transition_duration_seconds=0.0),
+            RenderScene(source_path=str(src2), duration_seconds=4.0,
+                        transition="crossfade", transition_duration_seconds=0.5),
+            RenderScene(source_path=str(src3), duration_seconds=3.0,
+                        transition="cut", transition_duration_seconds=0.0),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_str = "{" + ";".join(a for a in args if "filter_complex" in a or "xfade" in a or "concat" in a or "settb" in a) + "}"
+
+    # Scene 0→1 (cut): should use concat
+    assert "concat" in filter_str, \
+        f"Boundary 0→1 (cut) should produce concat: {filter_str}"
+    # Scene 1→2 (crossfade): should use xfade
+    assert "xfade=" in filter_str, \
+        f"Boundary 1→2 (crossfade) should produce xfade: {filter_str}"
+        # xfade offset: cumulative after cut (3.0+4.0=7.0), minus dur = 6.5
+    assert "offset=6.5" in filter_str, \
+        f"xfade offset should be 6.5 (7.0 - 0.5): {filter_str}"
+
+
+def test_per_scene_transition_fade_xfade(tmp_path):
+    """Per-scene transitions: fade→crossfade should mix fade + xfade."""
+    src1, src2, src3 = tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "c.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+    src3.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="test",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=5.0,
+                        transition="fade", transition_duration_seconds=0.5),
+            RenderScene(source_path=str(src2), duration_seconds=4.0,
+                        transition="crossfade", transition_duration_seconds=0.3),
+            RenderScene(source_path=str(src3), duration_seconds=3.0,
+                        transition="cut", transition_duration_seconds=0.0),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_str = "{" + ";".join(a for a in args if "filter_complex" in a or "xfade" in a or "concat" in a or "fade=t=in" in a or "fade=t=out" in a or "settb" in a) + "}"
+
+    # Scene 0→1 (fade): fade-in/out on scene 1
+    assert "fade=t=in:st=0:d=0.5" in filter_str, \
+        f"Boundary 0→1 (fade) should fade-in scene 1: {filter_str}"
+    # Scene 1→2 (crossfade): should use xfade
+    assert "xfade=" in filter_str, \
+        f"Boundary 1→2 (crossfade) should use xfade: {filter_str}"

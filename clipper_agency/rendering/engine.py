@@ -67,96 +67,98 @@ def _build_drawtext(caption: CaptionOverlay, time_offset: float = 0.0) -> str:
 def _build_ffmpeg_args(plan: RenderPlan, output_path: Path) -> list[str]:
     """Build complete FFmpeg command-line arguments for *plan*.
 
-    Handles three transition strategies:
+    Each scene's ``.transition`` field controls the transition FROM that scene
+    TO the next scene.  This respects per-scene transition boundaries so that
+    mixed-transition plans (e.g. ``cut → crossfade → cut``) are rendered
+    correctly rather than using a single global transition type.
 
-    * **cut** — plain concat (rapid_update).
-    * **fade** — per-scene fade-in/out before concat (news_card).
-    * **crossfade** — xfade chain with normalised inputs (b_roll_narration).
+    Supported transition strategies:
+
+    * **cut** — plain concat of normalised inputs.
+    * **fade** — per-scene fade-in/out before concat.
+    * **crossfade** — xfade with normalised inputs.
 
     Returns a list suitable for ``subprocess.run(cmd, shell=False, ...)``.
     """
     cmd: list[str] = ["ffmpeg", "-y"]
     scenes = plan.scenes
     num_scenes = len(scenes)
-    filter_parts: list[str] = []
+    if num_scenes == 0:
+        raise ValueError("Render plan contains no scenes")
 
-    # ── Determine transition type from the first non-cut scene ──
-    transition_type = "cut"
-    transition_dur = 0.0
-    for scene in scenes:
-        if scene.transition and scene.transition != "cut":
-            transition_type = scene.transition
-            transition_dur = scene.transition_duration_seconds
-            break
+    filter_parts: list[str] = []
 
     # ── Input files (trimmed to scene duration) ──
     for scene in scenes:
         cmd.extend(["-t", str(scene.duration_seconds), "-i", str(scene.source_path)])
 
-    # ── Capture start offsets for downstream caption timing ──
+    # ── Normalise all inputs ──
+    for i in range(num_scenes):
+        filter_parts.append(
+            f"[{i}:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30[n{i}]"
+        )
+
+    # ── Build filter chain iteratively, boundary by boundary ──
+    # Each scene's .transition controls the transition from this scene
+    # to the *next* scene.  Iterating boundaries instead of picking one
+    # global type means mixed-transition plans render correctly.
     scene_offsets: list[float] = [0.0] * num_scenes
 
-    # ── Video filter chain ──
-    if transition_type == "crossfade" and num_scenes > 1:
-        dur = transition_dur
-
-        # Normalise each input for consistent xfade
-        for i in range(num_scenes):
-            filter_parts.append(
-                f"[{i}:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30[fn{i}]"
-            )
-
-        # Chain xfade filters cumulatively
-        last_label = "fn0"
-        cumulative = scenes[0].duration_seconds
-        for i in range(1, num_scenes):
-            offset = cumulative - i * dur
-            out_label = f"xf{i}" if i < num_scenes - 1 else "outv"
-            filter_parts.append(
-                f"[{last_label}][fn{i}]xfade=transition=fade:"
-                f"duration={dur}:offset={offset}[{out_label}]"
-            )
-            last_label = out_label
-            cumulative += scenes[i].duration_seconds
-
-        # Caption offsets: scene N starts at sum(d[0..N-1]) - N * xfade_dur
-        scene_offsets[0] = 0.0
-        cum = 0.0
-        for i in range(1, num_scenes):
-            cum += scenes[i - 1].duration_seconds
-            scene_offsets[i] = max(0.0, cum - i * dur)
-
-        total_duration = sum(s.duration_seconds for s in scenes) - (num_scenes - 1) * dur
-
-    elif transition_type == "fade" and num_scenes > 1:
-        dur = transition_dur
-
-        # Per-scene fade-in / fade-out, then concat
-        for i, scene in enumerate(scenes):
-            d = scene.duration_seconds
-            filter_parts.append(
-                f"[{i}:v]fade=t=in:st=0:d={dur},"
-                f"fade=t=out:st={d - dur}:d={dur}[f{i}]"
-            )
-        fade_inputs = "".join(f"[f{i}]" for i in range(num_scenes))
-        filter_parts.append(f"{fade_inputs}concat=n={num_scenes}:v=1[outv]")
-
-        cum = 0.0
-        for i in range(num_scenes):
-            scene_offsets[i] = cum
-            cum += scenes[i].duration_seconds
-        total_duration = cum
-
+    if num_scenes == 1:
+        filter_parts.append("[n0]concat=n=1:v=1[outv]")
+        video_output_label = "outv"
+        total_duration = scenes[0].duration_seconds
     else:
-        # Plain cut (always used for single-scene plans too)
-        concat_inputs = "".join(f"[{i}:v]" for i in range(num_scenes))
-        filter_parts.append(f"{concat_inputs}concat=n={num_scenes}:v=1[outv]")
+        current_label = "n0"
+        cumulative_dur = scenes[0].duration_seconds
 
-        cum = 0.0
-        for i in range(num_scenes):
-            scene_offsets[i] = cum
-            cum += scenes[i].duration_seconds
-        total_duration = cum
+        for i in range(1, num_scenes):
+            prev = scenes[i - 1]
+            curr = scenes[i]
+            transition = prev.transition or "cut"
+            td = prev.transition_duration_seconds
+
+            out_label = f"v{i}" if i < num_scenes - 1 else "outv"
+
+            if transition == "cut":
+                filter_parts.append(
+                    f"[{current_label}][n{i}]concat=n=2:v=1[{out_label}]"
+                )
+                scene_offsets[i] = cumulative_dur
+                cumulative_dur += curr.duration_seconds
+
+            elif transition == "crossfade":
+                offset = cumulative_dur - td
+                filter_parts.append(
+                    f"[{current_label}][n{i}]xfade=transition=fade:"
+                    f"duration={td}:offset={offset}[{out_label}]"
+                )
+                scene_offsets[i] = cumulative_dur - td
+                cumulative_dur += curr.duration_seconds - td
+
+            elif transition == "fade":
+                filter_parts.append(
+                    f"[n{i}]fade=t=in:st=0:d={td},"
+                    f"fade=t=out:st={curr.duration_seconds - td}:d={td}[f{i}]"
+                )
+                filter_parts.append(
+                    f"[{current_label}][f{i}]concat=n=2:v=1[{out_label}]"
+                )
+                scene_offsets[i] = cumulative_dur
+                cumulative_dur += curr.duration_seconds
+
+            else:
+                # Unknown transition → treat as cut
+                filter_parts.append(
+                    f"[{current_label}][n{i}]concat=n=2:v=1[{out_label}]"
+                )
+                scene_offsets[i] = cumulative_dur
+                cumulative_dur += curr.duration_seconds
+
+            current_label = out_label
+
+        video_output_label = current_label
+        total_duration = cumulative_dur
 
     # ── Drawtext chain (each caption offset by its scene start time) ──
     all_captions: list[tuple[float, CaptionOverlay]] = []
