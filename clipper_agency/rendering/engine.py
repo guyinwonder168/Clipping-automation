@@ -15,6 +15,7 @@ from clipper_agency.rendering.contracts import (
     CaptionOverlay,
     RenderPlan,
     RenderResult,
+    RenderScene,
 )
 from clipper_agency.rendering.primitives import escape_drawtext
 from clipper_agency.rendering.thumbnails import generate_template_thumbnail
@@ -29,17 +30,23 @@ class TemplateRenderError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-def _build_drawtext(caption: CaptionOverlay) -> str:
+def _build_drawtext(caption: CaptionOverlay, time_offset: float = 0.0) -> str:
     """Return a single FFmpeg drawtext filter string for *caption*.
 
     Text is escaped via :func:`escape_drawtext`.  Positioning:
     * ``x=(w-text_w)/2`` (centred)
-    * ``y`` is ``h-th-20`` for ``position="bottom"``, ``20`` for ``"top"``.
+    * ``y``: ``h-th-20`` for ``"bottom"``, ``20`` for ``"top"``,
+      ``(h-th)/2`` for ``"center"``.
+
+    *time_offset* shifts the enable window so captions appear at the
+    correct absolute time in multi-scene plans.
     """
     escaped = escape_drawtext(caption.text)
 
     if caption.position == "top":
         y_expr = "20"
+    elif caption.position == "center":
+        y_expr = "(h-th)/2"
     else:
         y_expr = "h-th-20"
 
@@ -49,7 +56,7 @@ def _build_drawtext(caption: CaptionOverlay) -> str:
         f"fontcolor=white:"
         f"x=(w-text_w)/2:"
         f"y={y_expr}:"
-        f"enable='between(t,{caption.start_seconds},{caption.end_seconds})'"
+        f"enable='between(t,{caption.start_seconds + time_offset},{caption.end_seconds + time_offset})'"
     )
 
 
@@ -58,51 +65,178 @@ def _build_drawtext(caption: CaptionOverlay) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _add_trimmed_inputs(cmd: list[str], scenes: list[RenderScene]) -> None:
+    """Append FFmpeg inputs, trimmed to the planned scene duration."""
+    for scene in scenes:
+        cmd.extend(["-t", str(scene.duration_seconds), "-i", str(scene.source_path)])
+
+
+def _add_normalised_inputs(filter_parts: list[str], num_scenes: int) -> None:
+    """Append per-input normalisation filters used by concat/xfade."""
+    for index in range(num_scenes):
+        filter_parts.append(
+            f"[{index}:v]settb=AVTB,setpts=PTS-STARTPTS,fps=30[n{index}]"
+        )
+
+
+def _append_concat(
+    filter_parts: list[str],
+    left_label: str,
+    right_label: str,
+    out_label: str,
+) -> None:
+    """Append a two-input video concat filter."""
+    filter_parts.append(f"[{left_label}][{right_label}]concat=n=2:v=1[{out_label}]")
+
+
+def _append_fade_scene(
+    filter_parts: list[str],
+    scene_index: int,
+    duration_seconds: float,
+    transition_duration: float,
+) -> str:
+    """Append fade-in/out filters for one scene and return its output label."""
+    faded_label = f"f{scene_index}"
+    filter_parts.append(
+        f"[n{scene_index}]fade=t=in:st=0:d={transition_duration},"
+        f"fade=t=out:st={duration_seconds - transition_duration}:d={transition_duration}"
+        f"[{faded_label}]"
+    )
+    return faded_label
+
+
+def _transition_kind(scene: RenderScene) -> str:
+    """Return supported transition kind, treating unknown values as cut."""
+    if scene.transition in {"fade", "crossfade"}:
+        return scene.transition
+    return "cut"
+
+
+def _append_transition_boundary(
+    filter_parts: list[str],
+    current_label: str,
+    next_index: int,
+    previous_scene: RenderScene,
+    next_scene: RenderScene,
+    out_label: str,
+    cumulative_duration: float,
+) -> tuple[str, float, float]:
+    """Append one scene-boundary transition.
+
+    Returns ``(out_label, next_scene_offset, new_cumulative_duration)``.
+    """
+    transition_duration = previous_scene.transition_duration_seconds
+    transition = _transition_kind(previous_scene)
+
+    if transition == "crossfade":
+        offset = cumulative_duration - transition_duration
+        filter_parts.append(
+            f"[{current_label}][n{next_index}]xfade=transition=fade:"
+            f"duration={transition_duration}:offset={offset}[{out_label}]"
+        )
+        return out_label, offset, cumulative_duration + next_scene.duration_seconds - transition_duration
+
+    if transition == "fade":
+        faded_label = _append_fade_scene(
+            filter_parts,
+            next_index,
+            next_scene.duration_seconds,
+            transition_duration,
+        )
+        _append_concat(filter_parts, current_label, faded_label, out_label)
+        return out_label, cumulative_duration, cumulative_duration + next_scene.duration_seconds
+
+    _append_concat(filter_parts, current_label, f"n{next_index}", out_label)
+    return out_label, cumulative_duration, cumulative_duration + next_scene.duration_seconds
+
+
+def _build_transition_chain(
+    filter_parts: list[str],
+    scenes: list[RenderScene],
+) -> tuple[list[float], float]:
+    """Append the video transition chain and return scene offsets + duration."""
+    num_scenes = len(scenes)
+    scene_offsets: list[float] = [0.0] * num_scenes
+
+    if num_scenes == 1:
+        filter_parts.append("[n0]concat=n=1:v=1[outv]")
+        return scene_offsets, scenes[0].duration_seconds
+
+    current_label = "n0"
+    cumulative_duration = scenes[0].duration_seconds
+    for index in range(1, num_scenes):
+        out_label = f"v{index}" if index < num_scenes - 1 else "outv"
+        current_label, scene_offsets[index], cumulative_duration = _append_transition_boundary(
+            filter_parts,
+            current_label,
+            index,
+            scenes[index - 1],
+            scenes[index],
+            out_label,
+            cumulative_duration,
+        )
+
+    return scene_offsets, cumulative_duration
+
+
+def _collect_caption_offsets(
+    scenes: list[RenderScene],
+    scene_offsets: list[float],
+) -> list[tuple[float, CaptionOverlay]]:
+    """Flatten scene captions with absolute scene offsets."""
+    return [
+        (scene_offsets[scene_idx], caption)
+        for scene_idx, scene in enumerate(scenes)
+        for caption in scene.captions
+    ]
+
+
+def _append_caption_filters(
+    filter_parts: list[str],
+    caption_offsets: list[tuple[float, CaptionOverlay]],
+) -> str:
+    """Append drawtext filters and return the final video output label."""
+    previous_label = "outv"
+    for index, (offset, caption) in enumerate(caption_offsets):
+        label = f"cap{index}"
+        drawtext = _build_drawtext(caption, time_offset=offset)
+        filter_parts.append(f"[{previous_label}]{drawtext}[{label}]")
+        previous_label = label
+    return previous_label
+
+
 def _build_ffmpeg_args(plan: RenderPlan, output_path: Path) -> list[str]:
     """Build complete FFmpeg command-line arguments for *plan*.
 
-    Filter graph structure::
+    Each scene's ``.transition`` field controls the transition FROM that scene
+    TO the next scene.  This respects per-scene transition boundaries so that
+    mixed-transition plans (e.g. ``cut → crossfade → cut``) are rendered
+    correctly rather than using a single global transition type.
 
-        [0:v][1:v]...concat=n=N:v=1[outv]
-        ;[outv]drawtext=...:enable='...'[v0];[v0]drawtext=...[v1];...
-        ;anullsrc[outa]
+    Supported transition strategies:
+
+    * **cut** — plain concat of normalised inputs.
+    * **fade** — per-scene fade-in/out before concat.
+    * **crossfade** — xfade with normalised inputs.
 
     Returns a list suitable for ``subprocess.run(cmd, shell=False, ...)``.
     """
     cmd: list[str] = ["ffmpeg", "-y"]
     scenes = plan.scenes
     num_scenes = len(scenes)
+    if num_scenes == 0:
+        raise ValueError("Render plan contains no scenes")
+
     filter_parts: list[str] = []
+    _add_trimmed_inputs(cmd, scenes)
+    _add_normalised_inputs(filter_parts, num_scenes)
+    scene_offsets, total_duration = _build_transition_chain(filter_parts, scenes)
 
-    # ── Input files ──
-    for scene in scenes:
-        cmd.extend(["-i", str(scene.source_path)])
-
-    # ── Concat filter ──
-    concat_inputs = "".join(f"[{i}:v]" for i in range(num_scenes))
-    concat_filter = f"{concat_inputs}concat=n={num_scenes}:v=1[outv]"
-    filter_parts.append(concat_filter)
-
-    # ── Optional drawtext chain ──
-    all_captions = [
-        (i, cap)
-        for i, scene in enumerate(scenes)
-        for cap in scene.captions
-    ]
-    if all_captions:
-        # First drawtext takes [outv] as input, each subsequent takes [v{N}]
-        previous_label = "outv"
-        for idx, (_, cap) in enumerate(all_captions):
-            dt = _build_drawtext(cap)
-            label = f"v{idx}"
-            filter_parts.append(f"[{previous_label}]{dt}[{label}]")
-            previous_label = label
-        video_output_label = previous_label
-    else:
-        video_output_label = "outv"
+    # ── Drawtext chain (each caption offset by its scene start time) ──
+    all_captions = _collect_caption_offsets(scenes, scene_offsets)
+    video_output_label = _append_caption_filters(filter_parts, all_captions)
 
     # ── Silent audio ──
-    total_duration = sum(scene.duration_seconds for scene in scenes)
     filter_parts.append(
         f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={total_duration}[outa]"
     )

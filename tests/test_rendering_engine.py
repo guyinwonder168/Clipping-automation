@@ -443,3 +443,203 @@ def test_standalone_renderer_rapid_update(tmp_path):
     # Rapid Update should have drawtext captions in filter
     cmd_text = (diagnostics / "ffmpeg_command.txt").read_text()
     assert "drawtext" in cmd_text
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for Codex review fixes
+# ---------------------------------------------------------------------------
+
+
+def test_drawtext_center_position():
+    """Fix 3: center-position captions should use y=(h-th)/2 (not bottom)."""
+    overlay = CaptionOverlay(
+        text="Punchy Text",
+        start_seconds=0.0,
+        end_seconds=2.5,
+        position="center",
+    )
+    result = _build_drawtext(overlay)
+    assert "y=(h-th)/2" in result
+    assert "y=h-th-20" not in result
+
+
+def test_input_t_trimming_flag(tmp_path):
+    """Fix 2: each input should be preceded by -t <duration>."""
+    src1 = tmp_path / "a.mp4"
+    src2 = tmp_path / "b.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="news_card",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=5.0,
+                        transition="fade", transition_duration_seconds=0.5),
+            RenderScene(source_path=str(src2), duration_seconds=3.0,
+                        transition="fade", transition_duration_seconds=0.5),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+
+    # Find the -t flags for each input
+    t_flags = []
+    for i, a in enumerate(args):
+        if a == "-t":
+            t_flags.append(float(args[i + 1]))
+    assert t_flags == [5.0, 3.0], f"Expected -t 5.0 and -t 3.0, got {t_flags}"
+
+
+def test_caption_offset_multi_scene(tmp_path):
+    """Fix 1: multi-scene captions should be offset by prior scene durations."""
+    src1 = tmp_path / "first.mp4"
+    src2 = tmp_path / "second.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="b_roll_narration",
+        scenes=[
+            RenderScene(
+                source_path=str(src1), duration_seconds=5.0,
+                captions=[CaptionOverlay(text="Intro", start_seconds=0.0, end_seconds=5.0)],
+                transition="crossfade", transition_duration_seconds=0.3,
+            ),
+            RenderScene(
+                source_path=str(src2), duration_seconds=5.0,
+                captions=[CaptionOverlay(text="Body", start_seconds=0.0, end_seconds=5.0)],
+                transition="crossfade", transition_duration_seconds=0.3,
+            ),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_part = [a for a in args if "drawtext" in a]
+
+    # Scene 0 caption at offset 0
+    assert any("between(t,0.0,5.0)" in f for f in filter_part), \
+        f"Scene 0 caption should be at 0-5s, got: {filter_part}"
+    # Scene 1 caption offset = d0 - xfade_dur = 5.0 - 0.3 = 4.7
+    assert any("between(t,4.7,9.7)" in f for f in filter_part), \
+        f"Scene 1 caption should be at 4.7-9.7s, got: {filter_part}"
+
+
+def test_fade_transition_filter_chain(tmp_path):
+    """Fix 4: fade transition should produce per-scene fade filters + concat."""
+    src1 = tmp_path / "a.mp4"
+    src2 = tmp_path / "b.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="news_card",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=5.0,
+                        transition="fade", transition_duration_seconds=0.5),
+            RenderScene(source_path=str(src2), duration_seconds=5.0,
+                        transition="fade", transition_duration_seconds=0.5),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_part = [a for a in args if "filter_complex" in a or "fade" in a or "concat" in a]
+
+    # Should contain fade=t=in:st=0:d=0.5 AND fade=t=out per scene
+    filter_str = ";".join(filter_part)
+    assert "fade=t=in:st=0:d=0.5" in filter_str, \
+        f"Missing fade-in in filter: {filter_str}"
+    assert "fade=t=out:st=4.5:d=0.5" in filter_str, \
+        f"Missing fade-out in filter: {filter_str}"
+    # Should still have concat after fade
+    assert "concat" in filter_str, \
+        f"Missing concat in filter: {filter_str}"
+
+
+def test_xfade_transition_filter_chain(tmp_path):
+    """Fix 4: crossfade should produce xfade chain (not plain concat)."""
+    src1 = tmp_path / "a.mp4"
+    src2 = tmp_path / "b.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="b_roll_narration",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=5.0,
+                        transition="crossfade", transition_duration_seconds=0.3),
+            RenderScene(source_path=str(src2), duration_seconds=5.0,
+                        transition="crossfade", transition_duration_seconds=0.3),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_part = [a for a in args if "filter_complex" in a or "xfade" in a or "concat" in a]
+    filter_str = ";".join(filter_part)
+
+    # Must use xfade, NOT concat
+    assert "xfade=" in filter_str, \
+        f"Missing xfade in filter (expected xfade chain, not concat): {filter_str}"
+    assert "concat" not in filter_str, \
+        f"concat should NOT appear in xfade filter: {filter_str}"
+    # Check xfade parameters
+    assert "duration=0.3" in filter_str
+    assert "offset=4.7" in filter_str  # d0 - xfade_dur = 5.0 - 0.3
+    # Should have settb=AVTB normalisation
+    assert "settb=AVTB" in filter_str
+
+
+def test_per_scene_transition_cut_xfade_cut(tmp_path):
+    """Per-scene transitions: cut→crossfade→cut should mix concat AND xfade."""
+    src1, src2, src3 = tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "c.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+    src3.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="test",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=3.0,
+                        transition="cut", transition_duration_seconds=0.0),
+            RenderScene(source_path=str(src2), duration_seconds=4.0,
+                        transition="crossfade", transition_duration_seconds=0.5),
+            RenderScene(source_path=str(src3), duration_seconds=3.0,
+                        transition="cut", transition_duration_seconds=0.0),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_str = "{" + ";".join(a for a in args if "filter_complex" in a or "xfade" in a or "concat" in a or "settb" in a) + "}"
+
+    # Scene 0→1 (cut): should use concat
+    assert "concat" in filter_str, \
+        f"Boundary 0→1 (cut) should produce concat: {filter_str}"
+    # Scene 1→2 (crossfade): should use xfade
+    assert "xfade=" in filter_str, \
+        f"Boundary 1→2 (crossfade) should produce xfade: {filter_str}"
+        # xfade offset: cumulative after cut (3.0+4.0=7.0), minus dur = 6.5
+    assert "offset=6.5" in filter_str, \
+        f"xfade offset should be 6.5 (7.0 - 0.5): {filter_str}"
+
+
+def test_per_scene_transition_fade_xfade(tmp_path):
+    """Per-scene transitions: fade→crossfade should mix fade + xfade."""
+    src1, src2, src3 = tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "c.mp4"
+    src1.write_text("dummy")
+    src2.write_text("dummy")
+    src3.write_text("dummy")
+
+    plan = RenderPlan(
+        template_name="test",
+        scenes=[
+            RenderScene(source_path=str(src1), duration_seconds=5.0,
+                        transition="fade", transition_duration_seconds=0.5),
+            RenderScene(source_path=str(src2), duration_seconds=4.0,
+                        transition="crossfade", transition_duration_seconds=0.3),
+            RenderScene(source_path=str(src3), duration_seconds=3.0,
+                        transition="cut", transition_duration_seconds=0.0),
+        ],
+    )
+    args = _build_ffmpeg_args(plan, tmp_path / "out.mp4")
+    filter_str = "{" + ";".join(a for a in args if "filter_complex" in a or "xfade" in a or "concat" in a or "fade=t=in" in a or "fade=t=out" in a or "settb" in a) + "}"
+
+    # Scene 0→1 (fade): fade-in/out on scene 1
+    assert "fade=t=in:st=0:d=0.5" in filter_str, \
+        f"Boundary 0→1 (fade) should fade-in scene 1: {filter_str}"
+    # Scene 1→2 (crossfade): should use xfade
+    assert "xfade=" in filter_str, \
+        f"Boundary 1→2 (crossfade) should use xfade: {filter_str}"

@@ -1,10 +1,14 @@
 """yt-dlp media download service."""
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
+
+
+UNSAFE_URL_CHARS = re.compile(r"[\x00-\x20\x7f]")
 
 
 @dataclass
@@ -19,6 +23,20 @@ class DownloadResult:
 class YtDlpService:
     """Download media using the yt-dlp CLI tool."""
 
+    def _validated_url(self, url: str) -> str:
+        """Return a normalized URL safe to pass as a yt-dlp operand."""
+        if UNSAFE_URL_CHARS.search(url):
+            raise ValueError(f"Invalid download URL: {url}")
+
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.fragment:
+            raise ValueError(f"Invalid download URL: {url}")
+
+        safe_url = parsed.scheme + "://" + parsed.netloc + parsed.path
+        if parsed.query:
+            safe_url += "?" + parsed.query
+        return safe_url
+
     def download(
         self,
         url: str,
@@ -29,14 +47,7 @@ class YtDlpService:
         Returns:
             DownloadResult on success, None on failure.
         """
-        # Validate URL and reconstruct from safe components so the
-        # command-injection analyzer sees a producer string, not raw input.
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError(f"Invalid download URL: {url}")
-        safe_url = parsed.scheme + "://" + parsed.netloc + parsed.path
-        if parsed.query:
-            safe_url += "?" + parsed.query
+        safe_url = self._validated_url(url)
 
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -51,6 +62,7 @@ class YtDlpService:
                     str(out),
                     "--max-filesize",
                     "50M",
+                    "--",
                     safe_url,
                 ],
                 capture_output=True,

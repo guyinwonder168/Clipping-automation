@@ -3,6 +3,8 @@
 import subprocess
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from clipper_agency.services.ytdlp import YtDlpService, DownloadResult
 
 
@@ -20,6 +22,37 @@ def test_download_video(mock_run, tmp_path):
     result = svc.download("https://example.com/video", str(out))
     assert result.path.endswith(".mp4")
     mock_run.assert_called_once()
+    args = mock_run.call_args.args[0]
+    assert "--" in args
+    assert args[args.index("--") + 1] == "https://example.com/video"
+
+
+@patch("subprocess.run")
+def test_download_delimits_url_operand_from_options(mock_run, tmp_path):
+    mock_run.return_value = MagicMock(returncode=0)
+    svc = YtDlpService()
+
+    svc.download("https://example.com/--output?name=value", str(tmp_path / "video.mp4"))
+
+    args = mock_run.call_args.args[0]
+    assert args[args.index("--") + 1] == "https://example.com/--output?name=value"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://example.com/video",
+        "https://exa mple.com/video",
+        "https://example.com/vi\ndeo",
+        "https://example.com/vi\x00deo",
+        "https://example.com/video#fragment",
+    ],
+)
+def test_download_rejects_unsafe_urls(url, tmp_path):
+    svc = YtDlpService()
+
+    with pytest.raises(ValueError):
+        svc.download(url, str(tmp_path / "video.mp4"))
 
 
 @patch("subprocess.run")

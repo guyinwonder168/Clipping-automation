@@ -15,6 +15,7 @@ from clipper_agency.rendering.contracts import (
 )
 from clipper_agency.rendering.primitives import (
     make_caption_overlays,
+    transition_duration_for_template,
     transition_for_template,
 )
 from clipper_agency.rendering.templates import RenderTemplateConfig
@@ -50,6 +51,7 @@ def build_rapid_update_plan(
         Complete ``RenderPlan`` ready for the rendering engine.
     """
     transition = transition_for_template(template)
+    transition_dur = transition_duration_for_template(template)
 
     scenes: list[RenderScene] = []
     for source_path in source_paths:
@@ -66,6 +68,7 @@ def build_rapid_update_plan(
                 duration_seconds=_DEFAULT_CLIP_DURATION,
                 captions=captions,
                 transition=transition,
+                transition_duration_seconds=transition_dur,
             )
         )
 
