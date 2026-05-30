@@ -11,6 +11,110 @@ from clipper_agency.core.scene_validator import SceneValidationResult
 from clipper_agency.core.scene_normalizer import NormalizeResult
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Task 11: Template rendering routing
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestComposerTemplateRouting:
+    """Task 11: Composer routes through template renderer when template_name is given."""
+
+    def test_composer_uses_template_renderer_when_template_name_provided(
+        self, tmp_path, monkeypatch,
+    ):
+        """Composer routes to template renderer when template_name is given."""
+        # Mock subprocess for preflight (ffmpeg / ffprobe version checks)
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.run",
+            lambda *args, **kwargs: type("R", (), {
+                "returncode": 0, "stdout": "ffmpeg version 5.1", "stderr": "",
+            })(),
+        )
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.check_output",
+            lambda *args, **kwargs: b"libx264\naac\nmp3",
+        )
+
+        calls = {}
+
+        def fake_render_plan(plan, output_path, diagnostics_dir):
+            calls["template_name"] = plan.template_name
+            calls["output_path"] = str(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake_video")
+            thumb = diagnostics_dir / "thumbnails" / "news_card.png"
+            thumb.parent.mkdir(parents=True, exist_ok=True)
+            thumb.write_bytes(b"fake_png")
+            return type("Result", (), {
+                "video_path": output_path,
+                "thumbnail_path": thumb,
+                "diagnostics_dir": diagnostics_dir,
+            })()
+
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.render_plan", fake_render_plan,
+        )
+
+        from clipper_agency.agents.composer import ComposerAgent
+
+        result = ComposerAgent().execute(
+            job_id=789,
+            assets=[{"path": str(tmp_path / "clip.mp4"), "scene": 1}],
+            audio_files=[],
+            output_dir=str(tmp_path / "outputs"),
+            assets_cache=str(tmp_path / "cache"),
+            caption="Halo dunia",
+            template_name="news_card",
+        )
+
+        assert calls["template_name"] == "news_card"
+        assert str(calls["output_path"]).endswith("job_789/video.mp4")
+        assert result["template_name"] == "news_card"
+        assert result["status"] == "completed"
+
+    def test_composer_skips_template_renderer_when_no_template_name(
+        self, tmp_path, monkeypatch,
+    ):
+        """Composer uses existing pipeline when no template_name."""
+        # Mock subprocess for preflight (ffmpeg / ffprobe version checks)
+        import subprocess as sp_mod
+
+        mock_run = monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.run",
+            lambda *args, **kwargs: type("R", (), {
+                "returncode": 0, "stdout": "ffmpeg version 5.1", "stderr": "",
+            })(),
+        )
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.check_output",
+            lambda *args, **kwargs: b"libx264\naac\nmp3",
+        )
+
+        from clipper_agency.agents.composer import ComposerAgent
+
+        agent = ComposerAgent()
+        # Mock _assemble_video and _generate_thumbnail so we bypass real ffmpeg
+        monkeypatch.setattr(
+            agent,
+            "_assemble_video",
+            lambda *args, **kw: {"cmd": ["ffmpeg"], "card_fallback_scenes": []},
+        )
+        monkeypatch.setattr(
+            agent, "_generate_thumbnail", lambda *args, **kw: None,
+        )
+
+        result = agent.execute(
+            job_id=790,
+            assets=[{"path": str(tmp_path / "clip.mp4"), "scene": 1}],
+            audio_files=[],
+            output_dir=str(tmp_path / "outputs"),
+        )
+
+        assert result["status"] == "completed"
+        # No template_name in result since existing path doesn't set it
+        assert result.get("template_name") is None
+
+
 class TestComposerName:
     """Agent name property."""
 
