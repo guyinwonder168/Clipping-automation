@@ -141,7 +141,7 @@ class TestScriptwriterExecute:
     def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):
         prompts_dir = tmp_path / "prompts"
         prompts_dir.mkdir()
-        (prompts_dir / "scriptwriter.txt").write_text(
+        (prompts_dir / "scriptwriter.md").write_text(
             "File scriptwriter prompt: {safety_rules_text}", encoding="utf-8"
         )
         mock_chat = mocker.patch(

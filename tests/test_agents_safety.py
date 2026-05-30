@@ -162,7 +162,7 @@ class TestSafetyExecute:
     def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):
         prompts_dir = tmp_path / "prompts"
         prompts_dir.mkdir()
-        (prompts_dir / "safety.txt").write_text("File safety prompt", encoding="utf-8")
+        (prompts_dir / "safety.md").write_text("File safety prompt", encoding="utf-8")
         mock_chat = mocker.patch(
             "clipper_agency.llm.client.OpenRouterClient.chat",
             return_value=self._mock_chat(
