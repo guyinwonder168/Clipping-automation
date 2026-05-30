@@ -1690,11 +1690,11 @@ Generate template-based `thumbnail.png` at 1080x1920.
 
 ---
 
-# Phase 15a — Template Rendering
+# Phase 15a — Template Rendering ✅ COMPLETE
 
 **Phase 15a objective:** Complete the MVP creative/rendering promise: real template-driven video rendering with caption overlays, transitions, and template-specific thumbnails.
 
-**Expected branch:** `phase/15a-template-rendering`
+**Branches:** `phase/15a-template-foundation` (PR 1), `phase/15a-template-adapters` (PR 2), `phase/15a-composer-template-integration` (PR 3)
 
 **Related:** Full observability dashboard and CLI parity (caps 6-8) moved to `docs/design/evolution_plan.md` Stage 2 — they were recognized as scope creep beyond the MVP debug-first requirement (SRS FR-14).
 
@@ -1775,7 +1775,26 @@ Add MVP-safe visual effects:
 
 ## Phase 15a Acceptance Criteria
 
-- All three `templates/*.yaml` files are actually loaded and used.
-- Final videos include template-specific captions/overlays/thumbnail treatment.
-- Observability stays at the Phase 12 debug-first level — retry-from-step controls and preview browsers are Stage 2 scope.
-- CLI observability stays at the Phase 13 debug commands — `job-timeline`, `job-open-artifact`, and `job-export-debug-bundle` are Stage 2 scope.
+- All three `templates/*.yaml` files are actually loaded and used. ✅
+- Final videos include template-specific captions/overlays/thumbnail treatment. ✅
+- Observability stays at the Phase 12 debug-first level — retry-from-step controls and preview browsers are Stage 2 scope. ✅
+- CLI observability stays at the Phase 13 debug commands — `job-timeline`, `job-open-artifact`, and `job-export-debug-bundle` are Stage 2 scope. ✅
+
+### Phase 15a Implementation Summary
+
+**Rendering package:** `clipper_agency/rendering/` — hybrid YAML + FFmpeg + Pillow template system.
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Template loader | `templates.py` | Loads and validates `templates/*.yaml` with strict schema checks |
+| Render contracts | `contracts.py` | Typed dataclasses for render plans, scenes, captions, overlays, transitions |
+| Shared primitives | `primitives.py` | Reusable FFmpeg filter chains: captions, overlays, lower-thirds, fade/crossfade |
+| Thumbnails | `thumbnails.py` | Pillow-generated template-aware cards and thumbnails at 1080×1920 |
+| Render engine | `engine.py` | Standalone FFmpeg orchestrator producing video from render plans |
+| News Card adapter | `renderers/news_card.py` | Headline + key facts + caption overlays |
+| B-Roll Narration adapter | `renderers/b_roll_narration.py` | Voiceover-led pacing with dynamic captions and lower-thirds |
+| Rapid Update adapter | `renderers/rapid_update.py` | Short clip sequences with punchy captions and quick transitions |
+
+**Composer integration:** `ComposerAgent._render_via_template()` early return in `clipper_agency/agents/composer.py`. When a template is configured, Composer delegates to the rendering engine; when no template is set, legacy Composer behavior is preserved.
+
+**Why hybrid YAML + FFmpeg + Pillow:** Offline-testable without external APIs, low dependency risk (both already in the stack), deterministic output for tests, and no new rendering framework introduced.

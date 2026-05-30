@@ -1,6 +1,6 @@
 # Phase 15a Template Rendering Task Plan
 
-**Status:** Draft approved from brainstorming  
+**Status:** ✅ Complete (all 17 tasks done, 3 PRs merged to master)  
 **Date:** 2026-05-29  
 **Phase branch family:** `phase/15a-*`  
 **Parent roadmap:** `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`

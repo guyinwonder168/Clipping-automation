@@ -35,7 +35,7 @@
 | FR-05 | Scriptwriter Agent writes script + caption in niche tone, rotates angle from creative history | P0 | MVP |
 | FR-06 | Voice Producer generates voiceover only after script validation using fallback order: ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly | P0 | MVP |
 | FR-07 | Visual Director downloads assets via yt-dlp + Pexels/local fallback, plans scene sequence | P0 | MVP |
-| FR-08 | Composer assembles video via FFmpeg: scenes, transitions, captions, audio mixing, thumbnail | P0 | MVP |
+| FR-08 | Composer assembles video via FFmpeg: scenes, transitions, captions, audio mixing, thumbnail. Template-driven rendering via `clipper_agency/rendering/` engine with per-template adapters (News Card, B-Roll Narration, Rapid Update) for structured caption overlays, transitions, and template thumbnails | P0 | MVP |
 | FR-09 | Reviewer Agent performs quality + safety + duplicate check (multimodal). Max 2 retries by Admin/Creative Lead | P0 | MVP |
 | FR-10 | Output packager produces `video.mp4` + `caption.txt` + `thumbnail.png` + `metadata.json` | P0 | MVP |
 | FR-11 | Research cache with Time To Live (TTL): fresh <60min, stale 60-240min, expired >240min or new Asia/Jakarta day | P0 | MVP |
@@ -57,7 +57,7 @@
 | FR-18 | CLI: `python3 cli.py run --topic "..." --niche indonesian_artists` | P0 | MVP |
 | FR-19 | CLI `test-agent` subcommand: run individual agents independently for debugging/testing, bypassing orchestrator DB tracking | P1 | MVP |
 | FR-20 | Configurable agent autonomy levels | P1 | MVP |
-| FR-21 | Selectable video templates (manual or agent-auto) | P1 | MVP |
+| FR-21 | Selectable video templates (manual or agent-auto) — implemented via `clipper_agency/rendering/` with YAML template definitions in `templates/*.yaml` and per-template adapters | P1 | MVP |
 
 ### 2.3 Configuration
 

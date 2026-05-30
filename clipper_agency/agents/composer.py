@@ -21,12 +21,23 @@ from clipper_agency.core.paths import (
 )
 from clipper_agency.core.scene_normalizer import SceneNormalizer
 from clipper_agency.core.scene_validator import SceneValidator
+from clipper_agency.rendering.engine import render_plan
+from clipper_agency.rendering.renderers.b_roll_narration import build_b_roll_narration_plan
+from clipper_agency.rendering.renderers.news_card import build_news_card_plan
+from clipper_agency.rendering.renderers.rapid_update import build_rapid_update_plan
+from clipper_agency.rendering.templates import load_render_template
 
 logger = logging.getLogger(__name__)
 
 
 class ComposerAgent(BaseAgent):
     """Assembles final video from assets and audio using FFmpeg."""
+
+    _ADAPTERS = {
+        "news_card": build_news_card_plan,
+        "b_roll_narration": build_b_roll_narration_plan,
+        "rapid_update": build_rapid_update_plan,
+    }
 
     @property
     def agent_name(self) -> str:
@@ -57,6 +68,20 @@ class ComposerAgent(BaseAgent):
             "Composer: %d video assets, %d audio files",
             len(video_assets), len(voice_files),
         )
+
+        # ── Template rendering path ──
+        template_name = kwargs.get("template_name")
+        if template_name:
+            return self._render_via_template(
+                job_id=job_id,
+                assets=video_assets,
+                output_dir=output_dir,
+                assets_cache=assets_cache,
+                agent_dir=agent_dir,
+                template_name=template_name,
+                caption=kwargs.get("caption", ""),
+                title=kwargs.get("title", template_name),
+            )
 
         if not video_assets and not voice_files:
             logger.warning("Composer: no assets or audio — skipping")
@@ -119,6 +144,75 @@ class ComposerAgent(BaseAgent):
                 "video_path": video_path,
                 "thumbnail_path": "",
             }
+
+    def _render_via_template(
+        self,
+        job_id: int,
+        assets: list[dict],
+        output_dir: str,
+        assets_cache: str,
+        agent_dir: str,
+        template_name: str,
+        caption: str,
+        title: str,
+    ) -> dict[str, Any]:
+        """Route through template-based rendering engine."""
+        template = load_render_template(template_name)
+        adapter = self._ADAPTERS.get(template.type)
+
+        if adapter is None:
+            logger.warning(
+                "Composer: unknown template type %r — falling back to pipeline",
+                template.type,
+            )
+            return self.execute(
+                job_id=job_id,
+                assets=assets,
+                audio_files=[],
+                output_dir=output_dir,
+                assets_cache=assets_cache,
+                caption=caption,
+            )
+
+        source_paths = [Path(a["path"]) for a in assets if a.get("path")]
+
+        if assets_cache:
+            diagnostics_dir = Path(assets_cache) / f"job_{job_id}" / "agents" / "composer"
+        else:
+            diagnostics_dir = Path(output_dir) / f"job_{job_id}" / "diagnostics"
+
+        # Persist loaded template config for debugging
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        write_json(diagnostics_dir / "template_config.json", template.model_dump())
+
+        plan = adapter(
+            template=template,
+            source_paths=source_paths,
+            caption=caption,
+            title=title,
+            diagnostics_dir=diagnostics_dir,
+        )
+
+        output_path = Path(output_dir) / f"job_{job_id}" / "video.mp4"
+        result = render_plan(plan, output_path, diagnostics_dir)
+
+        output = {
+            "status": "completed",
+            "video_path": str(result.video_path),
+            "thumbnail_path": str(result.thumbnail_path),
+            "template_name": template_name,
+            "diagnostics_dir": str(diagnostics_dir),
+        }
+
+        if agent_dir:
+            write_json(agent_output_file(assets_cache, job_id, "composer"), output)
+
+        logger.info(
+            "Composer: template render completed — template=%s video=%s",
+            template_name, result.video_path,
+        )
+
+        return output
 
     def _run_preflight(self, output_dir: str, job_id: int) -> dict[str, Any] | None:
         """Run FFmpeg preflight.  Returns a failure dict or ``None`` on success."""

@@ -11,6 +11,110 @@ from clipper_agency.core.scene_validator import SceneValidationResult
 from clipper_agency.core.scene_normalizer import NormalizeResult
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Task 11: Template rendering routing
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestComposerTemplateRouting:
+    """Task 11: Composer routes through template renderer when template_name is given."""
+
+    def test_composer_uses_template_renderer_when_template_name_provided(
+        self, tmp_path, monkeypatch,
+    ):
+        """Composer routes to template renderer when template_name is given."""
+        # Mock subprocess for preflight (ffmpeg / ffprobe version checks)
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.run",
+            lambda *args, **kwargs: type("R", (), {
+                "returncode": 0, "stdout": "ffmpeg version 5.1", "stderr": "",
+            })(),
+        )
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.check_output",
+            lambda *args, **kwargs: b"libx264\naac\nmp3",
+        )
+
+        calls = {}
+
+        def fake_render_plan(plan, output_path, diagnostics_dir):
+            calls["template_name"] = plan.template_name
+            calls["output_path"] = str(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake_video")
+            thumb = diagnostics_dir / "thumbnails" / "news_card.png"
+            thumb.parent.mkdir(parents=True, exist_ok=True)
+            thumb.write_bytes(b"fake_png")
+            return type("Result", (), {
+                "video_path": output_path,
+                "thumbnail_path": thumb,
+                "diagnostics_dir": diagnostics_dir,
+            })()
+
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.render_plan", fake_render_plan,
+        )
+
+        from clipper_agency.agents.composer import ComposerAgent
+
+        result = ComposerAgent().execute(
+            job_id=789,
+            assets=[{"path": str(tmp_path / "clip.mp4"), "scene": 1}],
+            audio_files=[],
+            output_dir=str(tmp_path / "outputs"),
+            assets_cache=str(tmp_path / "cache"),
+            caption="Halo dunia",
+            template_name="news_card",
+        )
+
+        assert calls["template_name"] == "news_card"
+        assert str(calls["output_path"]).endswith("job_789/video.mp4")
+        assert result["template_name"] == "news_card"
+        assert result["status"] == "completed"
+
+    def test_composer_skips_template_renderer_when_no_template_name(
+        self, tmp_path, monkeypatch,
+    ):
+        """Composer uses existing pipeline when no template_name."""
+        # Mock subprocess for preflight (ffmpeg / ffprobe version checks)
+        import subprocess as sp_mod
+
+        mock_run = monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.run",
+            lambda *args, **kwargs: type("R", (), {
+                "returncode": 0, "stdout": "ffmpeg version 5.1", "stderr": "",
+            })(),
+        )
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.check_output",
+            lambda *args, **kwargs: b"libx264\naac\nmp3",
+        )
+
+        from clipper_agency.agents.composer import ComposerAgent
+
+        agent = ComposerAgent()
+        # Mock _assemble_video and _generate_thumbnail so we bypass real ffmpeg
+        monkeypatch.setattr(
+            agent,
+            "_assemble_video",
+            lambda *args, **kw: {"cmd": ["ffmpeg"], "card_fallback_scenes": []},
+        )
+        monkeypatch.setattr(
+            agent, "_generate_thumbnail", lambda *args, **kw: None,
+        )
+
+        result = agent.execute(
+            job_id=790,
+            assets=[{"path": str(tmp_path / "clip.mp4"), "scene": 1}],
+            audio_files=[],
+            output_dir=str(tmp_path / "outputs"),
+        )
+
+        assert result["status"] == "completed"
+        # No template_name in result since existing path doesn't set it
+        assert result.get("template_name") is None
+
+
 class TestComposerName:
     """Agent name property."""
 
@@ -566,3 +670,96 @@ class TestComposerAudioAssembly:
             assert pattern not in call_str.lower(), (
                 f"Forbidden audio pattern '{pattern}' found in ffmpeg args"
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Task 12: Persist Composer template diagnostics
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestComposerTemplateDiagnostics:
+    """Task 12: Composer persists template diagnostics in diagnostics_dir."""
+
+    def test_composer_persists_template_diagnostics(self, tmp_path, monkeypatch):
+        """Composer writes template_config.json and returns diagnostics_dir."""
+        # Mock subprocess for preflight
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.run",
+            lambda *args, **kwargs: type("R", (), {
+                "returncode": 0, "stdout": "ffmpeg version 5.1", "stderr": "",
+            })(),
+        )
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.subprocess.check_output",
+            lambda *args, **kwargs: b"libx264\naac\nmp3",
+        )
+
+        captured = {}
+
+        def fake_render_plan(plan, output_path, diagnostics_dir):
+            """Simulate engine writing render_plan.json."""
+            captured["diagnostics_dir"] = diagnostics_dir
+            diagnostics_dir.mkdir(parents=True, exist_ok=True)
+            # Engine writes render_plan.json
+            (diagnostics_dir / "render_plan.json").write_text(
+                json.dumps({"template_name": plan.template_name})
+            )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"fake_video")
+            thumb = diagnostics_dir / "thumbnails" / "news_card.png"
+            thumb.parent.mkdir(parents=True, exist_ok=True)
+            thumb.write_bytes(b"fake_png")
+            return type("Result", (), {
+                "video_path": output_path,
+                "thumbnail_path": thumb,
+            })()
+
+        monkeypatch.setattr(
+            "clipper_agency.agents.composer.render_plan", fake_render_plan,
+        )
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        output_dir = tmp_path / "outputs"
+
+        result = ComposerAgent().execute(
+            job_id=42,
+            assets=[{"path": str(tmp_path / "clip.mp4"), "scene": 1}],
+            audio_files=[],
+            output_dir=str(output_dir),
+            assets_cache=str(cache_dir),
+            template_name="news_card",
+            caption="Test caption",
+        )
+
+        composer_dir = cache_dir / "job_42" / "agents" / "composer"
+
+        # render_plan.json — written by engine, verify composer path produces it
+        assert (composer_dir / "render_plan.json").exists(), (
+            "render_plan.json should exist in diagnostics_dir"
+        )
+
+        # template_config.json — NEW: written by composer
+        assert (composer_dir / "template_config.json").exists(), (
+            "template_config.json should exist in diagnostics_dir"
+        )
+        config = json.loads((composer_dir / "template_config.json").read_text())
+        assert config["name"] == "news_card"
+        assert config["type"] == "news_card"
+
+        # diagnostics_dir in result dict — NEW
+        assert result["diagnostics_dir"] == str(composer_dir), (
+            f"Expected diagnostics_dir={composer_dir}, got {result.get('diagnostics_dir')}"
+        )
+
+        # input.json — already written by existing flow
+        assert (composer_dir / "input.json").exists(), (
+            "input.json should exist in diagnostics_dir"
+        )
+
+        # output.json — already written by existing flow
+        assert (composer_dir / "output.json").exists(), (
+            "output.json should exist in diagnostics_dir"
+        )
+
+        assert result["status"] == "completed"

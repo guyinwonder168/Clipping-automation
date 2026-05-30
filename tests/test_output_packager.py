@@ -253,3 +253,33 @@ class TestPackageValidation:
         job_output_dir = self._job_output_with_video(tmp_path)
         result = packager._validate_output_media(job_output_dir)
         assert result.valid is True
+
+
+class TestPackagerMetadataPropagation:
+    """Verify template metadata survives into final metadata.json."""
+
+    def _job_video(self, tmp_path, job_id: int) -> tuple[Path, str]:
+        output_dir = tmp_path / "output"
+        video_path = output_dir / f"job_{job_id}" / "video.mp4"
+        video_path.parent.mkdir(parents=True)
+        video_path.write_text("video")
+        return video_path, str(output_dir)
+
+    def test_output_packager_metadata_includes_template_name(self, tmp_path, mocker):
+        """template_name from composer output must appear in final metadata.json."""
+        mocker.patch("clipper_agency.output.packager.probe_video",
+                     return_value=Mock(width=1080, height=1920, codec="h264",
+                                       duration=30.0, has_audio=True))
+        packager = OutputPackager()
+        video_path, output_dir = self._job_video(tmp_path, 77)
+
+        result = packager.package(
+            job_id=77,
+            video_path=str(video_path),
+            metadata={"topic": "topic", "niche": "artist", "template_name": "news_card"},
+            output_dir=output_dir,
+        )
+
+        assert result["status"] == "completed"
+        metadata = json.loads(Path(result["metadata_path"]).read_text())
+        assert metadata["template_name"] == "news_card"
