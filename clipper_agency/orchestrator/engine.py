@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 _COMPOSER_FAILED = "Composer failed"
 _PACKAGING_FAILED = "Packaging failed"
+_VOICE_GEN_FAILED = "Voice generation failed"
 
 
 class Orchestrator:
@@ -216,12 +217,12 @@ class Orchestrator:
         if voice_output.get("status") == "failed":
             logger.error("Voice Producer FAILED: %s", voice_output.get("error"))
             mark_agent_failed(conn, job_id, "voice_producer",
-                              voice_output.get("error", "Voice generation failed"))
+                              voice_output.get("error", _VOICE_GEN_FAILED))
             update_job_status(conn, job_id, "FAILED",
-                              voice_output.get("error", "Voice generation failed"))
+                              voice_output.get("error", _VOICE_GEN_FAILED))
             return {
                 "status": "failed", "failed_at": "voice_producer",
-                "reason": voice_output.get("error", "Voice generation failed"),
+                "reason": voice_output.get("error", _VOICE_GEN_FAILED),
                 "job_id": job_id,
             }
         self._complete_agent(conn, assets_cache, job_id, "voice_producer")
