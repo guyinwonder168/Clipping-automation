@@ -19,7 +19,7 @@ class FishAudioService:
     BASE_URL = "https://api.fish.audio/v1"
 
     def __init__(self) -> None:
-        self.api_key = os.getenv("FISH_AUDIO_API_KEY") or os.getenv("FISHAUDIO_KEY")
+        self.api_key = os.getenv("FISHAUDIO_API_KEY")
 
     def generate_voice(
         self, text: str, voice_id: str, output_path: str
@@ -33,7 +33,7 @@ class FishAudioService:
             The output file path.
         """
         if not self.api_key:
-            raise ValueError("FISH_AUDIO_API_KEY not set")
+            raise ValueError("FISHAUDIO_API_KEY not set")
 
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)

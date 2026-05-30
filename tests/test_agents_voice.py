@@ -104,7 +104,7 @@ class TestVoiceProducerGenerate:
         )
         # Ensure no other keys are present so fallback doesn't kick in
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
+        monkeypatch.delenv("FISHAUDIO_API_KEY", raising=False)
 
         agent = VoiceProducerAgent()
         result = agent.execute(

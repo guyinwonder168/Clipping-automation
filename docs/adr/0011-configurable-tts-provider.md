@@ -28,14 +28,14 @@ Add Fish Audio as a configurable, auto-detected TTS provider alongside ElevenLab
 
 | Priority | Env Var Set | Provider |
 |----------|-------------|----------|
-| 1 (highest) | `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` | Fish Audio |
+| 1 (highest) | `FISHAUDIO_API_KEY` | Fish Audio |
 | 2 | `ELEVENLABS_API_KEY` | ElevenLabs |
 | — | Neither | Raise error, stop pipeline |
 
 - **`_create_service(provider)`** — dispatches to the correct service class based on detected provider.
 
 - **`AppSettings` fields**:
-  - `fish_audio_api_key` (with `validation_alias="FISHAUDIO_KEY"` for backward compatibility)
+  - `fish_audio_api_key` (with `validation_alias="FISHAUDIO_API_KEY"`)
   - `fish_audio_voice_id` (env: `FISH_AUDIO_VOICE_ID`)
   - `elevenlabs_voice_id` (env: `ELEVENLABS_VOICE_ID`)
 
