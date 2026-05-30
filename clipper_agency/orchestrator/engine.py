@@ -494,6 +494,7 @@ class Orchestrator:
             video_path=compose_output.get("video_path", ""),
             caption=script_output.get("caption", ""),
             topic=topic, niche=niche, output_dir=output_dir,
+            template_name=compose_output.get("template_name"),
         )
 
         if pkg_output.get("status") == "failed":
@@ -846,9 +847,12 @@ class Orchestrator:
         caption_path_file.write_text(caption.strip()[:150])
         # Thumbnail is written directly to the job-owned directory by composer.
         # Packager expects it at the fixed contract path (S6549 safe).
+        metadata: dict[str, Any] = {"topic": topic, "niche": niche}
+        if "template_name" in kwargs:
+            metadata["template_name"] = kwargs["template_name"]
         return packager.package(
             job_id=job_id,
             video_path=video_path,
-            metadata={"topic": topic, "niche": niche},
+            metadata=metadata,
             output_dir=output_dir,
         )
