@@ -308,7 +308,7 @@ Required before enabling those commands:
 | **Scriptwriter** | Writes script + caption in niche tone. Rotates angle from creative history. Always fresh. | Budget East | Never |
 | **Voice Producer** | Generates voiceover via provider fallback: ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly. `GeminiTTSService` uses `gemini-2.5-flash-preview-tts` with configured voice (default `Kore`) and wraps PCM audio as WAV when needed. `FishAudioService` uses `s2-pro` model, `POST /v1/tts`, `reference_id` for voice model. Voice files and sanitized `provider_attempts.json` are saved under `ASSETS_CACHE/job_{id}/agents/voice_producer/`. Always fresh. | API cost | Never |
 | **Visual Director** | Selects assets, plans scene sequence. MVP: yt-dlp + Pexels/local fallback. | Budget East | Never |
-| **Composer** | FFmpeg assembly: scenes, transitions, captions, audio mixing, thumbnail. | N/A | Never |
+| **Composer** | FFmpeg assembly: scenes, transitions, captions, audio mixing, thumbnail. Template-driven rendering via `clipper_agency/rendering/` with per-template adapters. | N/A | Never |
 | **Reviewer** | Quality + safety + duplicate check. Multimodal (video + text). Max 2 human-triggered retries. | Moderate | Never |
 | **Creative Director** | Stage 2. Proposes new angles/templates when variation exhausted. | Agentic East | Triggered |
 
@@ -334,7 +334,7 @@ Query construction is config-driven: the niche profile defines search terms, lan
 | **Scriptwriter** | Researcher contract/output, creative history; persisted as `agents/scriptwriter/input.json` | `script.json`, `caption.txt`, `hashtags.json`, selected angle, and `output.json` | N/A (always produces output) |
 | **Voice Producer** | Validated script text, voice_id from config; persisted as `agents/voice_producer/input.json` | Voice files under `agents/voice_producer/voices/`, `provider_attempts.json`, duration metadata, and `output.json` | All providers fail → stop, retry by Admin/Creative Lead |
 | **Visual Director** | Researcher video_sources, Pexels query from tags, local asset paths, generated card config; persisted as `agents/visual_director/input.json` | `scene_plan.json`, `provenance.json`, scene files under `scenes/`, cards under `cards/`, and `output.json` | Download failures → G9 handles |
-| **Composer** | Validated audio file, scene plan, template config, caption text; persisted as `agents/composer/input.json` | Final `OUTPUT_DIR/job_{id}/video.mp4`, plus `ffmpeg_command.txt`, `ffmpeg_stderr.log`, and `output.json` in job workspace | FFmpeg failure → stop, retry by Admin/Creative Lead |
+| **Composer** | Validated audio file, scene plan, template config, caption text; persisted as `agents/composer/input.json` | Final `OUTPUT_DIR/job_{id}/video.mp4`, plus `ffmpeg_command.txt`, `ffmpeg_stderr.log`, template diagnostics (`template_config.json`, `render_plan.json`, `ffmpeg_filtergraph.txt`), and `output.json` in job workspace | FFmpeg failure → stop, retry by Admin/Creative Lead |
 | **Reviewer** | Rendered video file, script text, caption, creative history; persisted as `agents/reviewer/input.json` | Pass/reject + specific issues + recommended retry step; persisted as `agents/reviewer/output.json` + `review.md` | Reject → Admin/Creative Lead decides |
 
 #### Researcher Output Schema
@@ -499,6 +499,37 @@ When no source clips or stock footage are available, the Visual Director generat
 - **Style:** Fonts, colors, layout from niche config template definition.
 - **Usage:** Integrated into scene sequence by Composer as full-screen slides between other clips.
 - **Quality signal:** Jobs using only generated cards (no real clips or stock footage) get escalated risk warning; Reviewer notified.
+
+### Template-Driven Rendering (Phase 15a)
+
+The Composer supports template-driven rendering via a hybrid YAML + FFmpeg + Pillow system in `clipper_agency/rendering/`. This system was chosen because it is offline-testable, uses only existing stack dependencies, and produces deterministic output for tests.
+
+**Architecture:**
+
+```text
+clipper_agency/rendering/
+├── templates.py          # YAML loading and strict validation
+├── contracts.py          # Typed dataclasses: RenderPlan, RenderScene, CaptionBlock, etc.
+├── primitives.py         # Reusable FFmpeg filter chains (captions, overlays, lower-thirds, fades)
+├── thumbnails.py         # Pillow-generated template-aware cards and thumbnails
+├── engine.py             # Standalone FFmpeg render orchestrator
+└── renderers/
+    ├── news_card.py      # Headline + key facts + caption overlays
+    ├── b_roll_narration.py  # Voiceover-led pacing + dynamic captions + lower-thirds
+    └── rapid_update.py   # Short clip sequences + punchy captions + quick transitions
+```
+
+**Flow:**
+
+1. `templates.py` loads the selected YAML template (`templates/*.yaml`) and validates layout, fonts, colors, caption style, scene durations, transitions, and thumbnail config.
+2. The appropriate per-template adapter converts script/research inputs into a `RenderPlan` (typed via `contracts.py`).
+3. Shared `primitives.py` generates FFmpeg filter chains for captions, overlays, lower-thirds, and transitions (fade/crossfade).
+4. `thumbnails.py` produces Pillow-rendered cards at 1080×1920 when no source media is available.
+5. `engine.py` orchestrates the final FFmpeg render from the `RenderPlan`, producing the output video.
+
+**Composer integration:** `ComposerAgent._render_via_template()` is called as an early return in `clipper_agency/agents/composer.py`. When a template is configured in the scene plan, Composer delegates all rendering to the template engine. When no template is set, the legacy Composer FFmpeg assembly path is preserved unchanged.
+
+**Diagnostics:** Template rendering diagnostics (template config, render plan, FFmpeg filtergraph, command log, stderr) are persisted under `ASSETS_CACHE/job_{id}/agents/composer/` for debug-first observability.
 
 ---
 
