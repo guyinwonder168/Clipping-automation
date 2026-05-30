@@ -1451,6 +1451,7 @@ class TestRunPipelineFrom:
              patch.object(Orchestrator, "_run_researcher"), \
              patch.object(Orchestrator, "_run_content_scriptwriter") as mock_sw, \
              patch.object(Orchestrator, "_run_content_voice"), \
+             patch.object(Orchestrator, "_run_visual_director_phase"), \
              patch.object(Orchestrator, "_run_composer") as mock_comp, \
              patch.object(Orchestrator, "_run_reviewer") as mock_rev, \
              patch.object(Orchestrator, "_package_output") as mock_pkg:
