@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Default voice IDs per provider
 _voice_ids = {
-    "elevenlabs": "21m00Tcm4TlvDq8ikWAM",
+    "elevenlabs": "JBFqnCBsd6RMkjVDRZzb",
     "fish_audio": "",
 }
 

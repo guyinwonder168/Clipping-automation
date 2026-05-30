@@ -52,10 +52,11 @@ def _log_startup_info() -> None:
     logger.info("DB path: %s", settings.db_path)
     logger.info("Output dir: %s", settings.output_dir)
     logger.info(
-        "Agent models: safety=%s researcher=%s scriptwriter=%s reviewer=%s",
+        "Agent models: safety=%s researcher=%s scriptwriter=%s visual_director=%s reviewer=%s",
         settings.safety_model,
         settings.researcher_model,
         settings.scriptwriter_model,
+        settings.visual_director_model,
         settings.reviewer_model,
     )
     # API key status (presence only — no values leaked)

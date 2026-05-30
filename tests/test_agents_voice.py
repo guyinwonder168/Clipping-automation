@@ -33,7 +33,7 @@ class TestVoiceProducerGenerate:
             job_id=1,
             script=script,
             output_dir="/tmp/output",
-            voice_id="21m00Tcm4TlvDq8ikWAM",
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
         )
         assert result["status"] == "completed"
         assert mock_generate.call_count == 2
@@ -75,7 +75,7 @@ class TestVoiceProducerGenerate:
         )
         assert result["status"] == "completed"
         call_kwargs = mock_generate.call_args
-        assert call_kwargs[0][1] == "21m00Tcm4TlvDq8ikWAM"
+        assert call_kwargs[0][1] == "JBFqnCBsd6RMkjVDRZzb"
 
     def test_execute_handles_empty_script(self, mocker, monkeypatch):
         monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")

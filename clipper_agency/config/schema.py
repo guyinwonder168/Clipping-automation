@@ -84,6 +84,7 @@ class AppSettings(BaseSettings):
     safety_model: str = "mimo-v2-flash"
     researcher_model: str = "mimo-v2-flash"
     scriptwriter_model: str = "mimo-v2-flash"
+    visual_director_model: str = "mimo-v2-flash"
     reviewer_model: str = "mimo-v2-flash"
 
     # Default LLM
@@ -94,7 +95,7 @@ class AppSettings(BaseSettings):
 
     # TTS provider configuration (Fish Audio or ElevenLabs)
     fish_audio_voice_id: str = ""   # Fish Audio reference_id (voice model)
-    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    elevenlabs_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"
     gemini_tts_voice_name: str = "Kore"
 
     # Debug / dev

@@ -148,7 +148,7 @@ class TestReviewerExecute:
     def test_execute_uses_prompt_file_when_available(self, mocker, tmp_path):
         prompts_dir = tmp_path / "prompts"
         prompts_dir.mkdir()
-        (prompts_dir / "reviewer.txt").write_text(
+        (prompts_dir / "reviewer.md").write_text(
             "File reviewer prompt: {safety_rules_text}", encoding="utf-8"
         )
         mock_chat = mocker.patch(
