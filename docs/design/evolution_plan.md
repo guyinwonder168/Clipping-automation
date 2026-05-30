@@ -1,14 +1,73 @@
 # Clipper Agency — Evolution Plan
 
-**Version:** 2.3
-**Date:** 2026-05-28
-**Status:** MVP Repair In Progress — Future Scope Updated During Phase 12
+**Version:** 2.4
+**Date:** 2026-05-31
+**Status:** MVP Phases 0-16 Complete — Future Scope Updated After Phase 16
 
 ---
 
 ## Purpose
 
 This document contains all future-stage details that were removed from MVP docs to keep them lean. Every item here is explicitly out of MVP scope. Referenced by `docs/PRD.md` §14.
+
+---
+
+## Deferred MVP+ Items (from Phase 16 Brainstorming)
+
+These items were discussed during Phase 16 design but deferred to keep the phase focused on Visual Director LLM planning. They are near-term improvements that should happen before or during Stage 1.5.
+
+### 1. LLM-powered Orchestrator (Future Evolution)
+
+**Current state:** Orchestrator is sequential and deterministic — it relays data between agents without intelligence. This was a deliberate design choice validated during Phase 16 research: "use the simplest pattern that works. Don't make the orchestrator smart, make agents smart."
+
+**Future state:** If the pipeline evolves beyond sequential execution (e.g., conditional branching, parallel agent execution, dynamic agent selection), an LLM-powered orchestrator could:
+- Decide which agents to run based on topic/niche
+- Route around failed agents intelligently
+- Optimize pipeline cost by skipping unnecessary agents
+
+**Trigger:** When pipeline becomes non-sequential or multi-path.
+
+### 2. Richer text_card Rendering
+
+**Current state:** Composer template engine supports 4 card styles (`news_card`, `speech_bubble`, `breaking_news`, `mock_ui`) with the Visual Director LLM output schema aligning to existing template variables.
+
+**Future state:** Expand card rendering with:
+- Animated card transitions (fade/slide between cards)
+- Dynamic text sizing based on content length
+- Branded color schemes per client/account
+- Video clip overlays (engagement badges, watermarks)
+- More card templates beyond the current 4
+
+**Trigger:** When content variety demands more visual styles than current templates provide.
+
+### 3. Researcher Smart Caching
+
+**Current state:** Researcher runs on every pipeline invocation, even when niche and topic haven't changed since the last run. For the same topic re-run (e.g., job retry, failed pipeline resume), the research is re-fetched.
+
+**Future state:** Skip Researcher when:
+- Same niche + same/similar topic was recently researched (configurable TTL, e.g., 24h)
+- Cache key: `{niche}_{topic_normalized}` → research artifacts
+- Other agents (composer, scriptwriter, voice, visual director) always produce fresh results per pipeline run
+
+**Rationale:** Researcher calls paid APIs (ScrapeCreators, Firecrawl). Caching saves cost and time when iterating on the same topic.
+
+**Trigger:** When API costs become noticeable or job iteration frequency increases.
+
+### 4. Full Config Hierarchy — Agent → Niche → Account → Job (Level C)
+
+**Current state:** MVP implements Level B — per-agent + per-niche config. Agent defaults can be overridden by niche profile.
+
+**Future state:** Full Level C override chain:
+```
+Agent defaults (lowest priority)
+  → Niche profile overrides
+    → Account overrides (different tones for different client accounts)
+      → Job-level overrides (one-off adjustments)
+```
+
+Use case: Agency model where different clients/accounts under the same niche need different tones, languages, or content strategies.
+
+**Trigger:** When multi-client or multi-account support is needed.
 
 ---
 
