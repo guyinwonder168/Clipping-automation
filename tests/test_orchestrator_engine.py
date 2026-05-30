@@ -617,10 +617,10 @@ class TestOrchestratorRunPipeline:
     # ── Bug-fix tests ──────────────────────────────────────────────
 
     def test_unwraps_aggregate_research_sources(self, db_initialized, tmp_path):
-        """P0: Orchestrator must unwrap Researcher's aggregate sources dict
-        before extracting source URLs. The real ResearcherAgent.execute()
-        returns 'sources' as {firecrawl_count, scrapecreators_count,
-        total_sources, sources: [...]} — not a flat list."""
+        """P0: Orchestrator passes research paths to Visual Director.
+        The new Visual Director reads research_contract.json directly,
+        so the orchestrator no longer extracts source_urls — it passes
+        research_contract_path and research_brief_path instead."""
         orch = Orchestrator(db_path=db_initialized)
         # Create real audio so G8 passes
         audio = tmp_path / "a.mp3"; audio.write_bytes(b"x")
@@ -659,10 +659,10 @@ class TestOrchestratorRunPipeline:
 
             orch.run_pipeline(topic="Test", niche="test_niche")
 
-        # Visual director should receive only the inner sources list URLs
+        # Visual director receives research_contract_path and research_brief_path
         visual_call = mock_visual.call_args[1]
-        assert visual_call.get("source_urls") is not None
-        assert visual_call["source_urls"] == ["https://a.com", "https://b.com", "https://c.com"]
+        assert "research_contract_path" in visual_call
+        assert "research_brief_path" in visual_call
 
     def test_g4_hard_fail_aborts_pipeline(self, db_initialized):
         """P1: G4 (PostResearchRisk) returning hard_fail must abort the
@@ -1786,10 +1786,10 @@ class TestEngineHelpers:
 
     # ── _run_visual_director_phase (lines 429-452) ──
 
-    def test_visual_director_phase_handles_dict_sources(
+    def test_visual_director_phase_passes_research_paths(
         self, db_initialized, tmp_path,
     ):
-        """sources_data as dict with 'sources' key extracts URLs correctly."""
+        """Engine passes research_contract_path and research_brief_path."""
         orch = Orchestrator(db_path=db_initialized)
         research_output = {
             "sources": {
@@ -1809,12 +1809,13 @@ class TestEngineHelpers:
             )
 
         _, kwargs = mock_vd.call_args
-        assert kwargs["source_urls"] == ["https://a.com", "https://b.com"]
+        assert "research_contract_path" in kwargs
+        assert "research_brief_path" in kwargs
 
-    def test_visual_director_phase_handles_list_sources(
+    def test_visual_director_phase_list_sources(
         self, db_initialized, tmp_path,
     ):
-        """sources_data as list uses the list directly."""
+        """Engine handles list sources format with research paths."""
         orch = Orchestrator(db_path=db_initialized)
         research_output = {
             "sources": [
@@ -1832,12 +1833,13 @@ class TestEngineHelpers:
             )
 
         _, kwargs = mock_vd.call_args
-        assert kwargs["source_urls"] == ["https://x.com", "https://y.com"]
+        assert "research_contract_path" in kwargs
+        assert "research_brief_path" in kwargs
 
-    def test_visual_director_phase_handles_other_sources(
+    def test_visual_director_phase_handles_none_sources(
         self, db_initialized, tmp_path,
     ):
-        """sources_data as None or str defaults to empty URL list."""
+        """Engine handles None sources with empty research paths."""
         orch = Orchestrator(db_path=db_initialized)
         research_output = {"sources": None}
 
@@ -1851,7 +1853,8 @@ class TestEngineHelpers:
             )
 
         _, kwargs = mock_vd.call_args
-        assert kwargs["source_urls"] == []
+        assert kwargs.get("research_contract_path", "") == ""
+        assert kwargs.get("research_brief_path", "") == ""
 
     # ── Pipeline exception handler (lines 386-389) ──
 
