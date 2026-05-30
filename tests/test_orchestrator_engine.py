@@ -1390,3 +1390,61 @@ class TestRunPipelineFrom:
         assert result["status"] == "completed"
         # scriptwriter should be re-run because cache was invalid
         mock_sw.assert_called_once()
+
+    # ── Phase 15a: Template name propagation ────────────────────────
+
+    def test_template_name_propagates_to_package_metadata(
+        self, db_initialized, tmp_path
+    ):
+        """Composer template_name must flow through engine to packager metadata."""
+        orch = Orchestrator(db_path=db_initialized)
+        audio = tmp_path / "a.mp3"; audio.write_bytes(b"x")
+        asset = tmp_path / "v.mp4"; asset.write_bytes(b"x")
+        video = tmp_path / "out.mp4"; video.write_bytes(b"X" * 2048)
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety, \
+             patch.object(Orchestrator, "_run_researcher") as mock_researcher, \
+             patch.object(Orchestrator, "_run_scriptwriter") as mock_sw, \
+             patch.object(Orchestrator, "_run_voice_producer") as mock_voice, \
+             patch.object(Orchestrator, "_run_visual_director") as mock_visual, \
+             patch.object(Orchestrator, "_run_composer") as mock_composer, \
+             patch.object(Orchestrator, "_run_reviewer") as mock_reviewer, \
+             patch("clipper_agency.orchestrator.engine.OutputPackager") as mock_pkg_cls:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            mock_researcher.return_value = {
+                "status": "completed", "research_brief": "brief",
+                "sources": ["https://a.com", "https://b.com"],
+            }
+            mock_sw.return_value = {
+                "status": "completed", "script": [], "caption": "cap",
+                "hashtags": [], "estimated_duration": 0,
+            }
+            mock_voice.return_value = {
+                "status": "completed", "audio_files": [str(audio)],
+            }
+            mock_visual.return_value = {
+                "status": "completed",
+                "assets": [{"scene": 1, "source": "pexels", "path": str(asset)}],
+            }
+            mock_composer.return_value = {
+                "status": "completed",
+                "video_path": str(video),
+                "thumbnail_path": "/tmp/thumb.png",
+                "template_name": "news_card",
+            }
+            mock_reviewer.return_value = {
+                "status": "pass", "score": 80, "feedback": "ok", "issues": [],
+            }
+            mock_pkg_inst = mock_pkg_cls.return_value
+            mock_pkg_inst.package.return_value = {
+                "status": "completed", "output_dir": str(tmp_path),
+                "video_path": str(video), "caption_path": "",
+                "thumbnail_path": "", "metadata_path": "",
+            }
+
+            result = orch.run_pipeline(topic="Test", niche="test_niche")
+
+        assert result["status"] == "completed"
+        # Verify template_name was passed to packager metadata
+        pkg_call = mock_pkg_inst.package.call_args
+        assert pkg_call[1]["metadata"]["template_name"] == "news_card"
