@@ -1524,3 +1524,350 @@ class TestRunPipelineFrom:
         # Verify template_name was passed to packager metadata
         pkg_call = mock_pkg_inst.package.call_args
         assert pkg_call[1]["metadata"]["template_name"] == "news_card"
+
+
+# ── Engine helper methods — coverage for uncovered paths ──────────
+
+
+@pytest.mark.usefixtures("mock_probe_video_ok")
+class TestEngineHelpers:
+    """Tests for uncovered helper methods on Orchestrator."""
+
+    # ── Agent runner methods (lines 774-849) ──
+
+    def test_run_safety_creates_agent_and_executes(self, db_initialized):
+        """_run_safety instantiates SafetyAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.SafetyAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "pass"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_safety(job_id=1, topic="Test")
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(job_id=1, topic="Test")
+        assert result == {"status": "pass"}
+
+    def test_run_researcher_creates_agent_and_executes(self, db_initialized):
+        """_run_researcher instantiates ResearcherAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.ResearcherAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "completed"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_researcher(
+                job_id=2, topic="Topic", safety_rules=["r1"],
+                output_dir="/out",
+            )
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(
+            job_id=2, topic="Topic",
+            safety_rules=["r1"], output_dir="/out",
+        )
+        assert result == {"status": "completed"}
+
+    def test_run_scriptwriter_creates_agent_and_executes(self, db_initialized):
+        """_run_scriptwriter instantiates ScriptwriterAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.ScriptwriterAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "completed"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_scriptwriter(
+                job_id=3, topic="Topic",
+                research_brief="brief", safety_rules=["r1"],
+            )
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(
+            job_id=3, topic="Topic",
+            research_brief="brief", safety_rules=["r1"],
+        )
+        assert result == {"status": "completed"}
+
+    def test_run_voice_producer_creates_agent_and_executes(self, db_initialized):
+        """_run_voice_producer instantiates VoiceProducerAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.VoiceProducerAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "completed"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_voice_producer(
+                job_id=4, script=[{"scene": 1}],
+                output_dir="/out",
+            )
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(
+            job_id=4, script=[{"scene": 1}], output_dir="/out",
+        )
+        assert result == {"status": "completed"}
+
+    def test_run_visual_director_creates_agent_and_executes(self, db_initialized):
+        """_run_visual_director instantiates VisualDirectorAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.VisualDirectorAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "completed"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_visual_director(
+                job_id=5, script=[{"scene": 1}],
+                topic="Topic", source_urls=["https://a.com"],
+                output_dir="/out",
+            )
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(
+            job_id=5, script=[{"scene": 1}],
+            topic="Topic", source_urls=["https://a.com"],
+            output_dir="/out",
+        )
+        assert result == {"status": "completed"}
+
+    def test_run_composer_creates_agent_and_executes(self, db_initialized):
+        """_run_composer instantiates ComposerAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.ComposerAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "completed"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_composer(
+                job_id=6, assets=[{"path": "v.mp4"}],
+                audio_files=["a.mp3"], output_dir="/out",
+            )
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(
+            job_id=6, assets=[{"path": "v.mp4"}],
+            audio_files=["a.mp3"], output_dir="/out",
+        )
+        assert result == {"status": "completed"}
+
+    def test_run_reviewer_creates_agent_and_executes(self, db_initialized):
+        """_run_reviewer instantiates ReviewerAgent and calls execute()."""
+        orch = Orchestrator(db_path=db_initialized)
+        with patch("clipper_agency.orchestrator.engine.ReviewerAgent") as mock_cls:
+            mock_agent = MagicMock()
+            mock_agent.execute.return_value = {"status": "pass"}
+            mock_cls.return_value = mock_agent
+
+            result = orch._run_reviewer(
+                job_id=7, topic="Topic",
+                script=[{"scene": 1}], caption="cap",
+                safety_rules=["r1"],
+            )
+
+        mock_cls.assert_called_once()
+        mock_agent.execute.assert_called_once_with(
+            job_id=7, topic="Topic",
+            script=[{"scene": 1}], caption="cap",
+            safety_rules=["r1"],
+        )
+        assert result == {"status": "pass"}
+
+    # ── _load_agent_output (lines 391-400) ──
+
+    def test_load_agent_output_returns_parsed_json(self, db_initialized, tmp_path):
+        """_load_agent_output returns parsed JSON when output.json exists."""
+        from clipper_agency.core.paths import agent_output_file
+
+        orch = Orchestrator(db_path=db_initialized)
+        ac = str(tmp_path / "cache")
+        data = {"status": "completed", "key": "value"}
+        out_path = Path(agent_output_file(ac, 1, "test_agent"))
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(data), encoding="utf-8")
+
+        result = orch._load_agent_output(ac, 1, "test_agent")
+        assert result == data
+
+    def test_load_agent_output_returns_empty_on_missing(self, db_initialized, tmp_path):
+        """_load_agent_output returns {} when no output.json exists."""
+        orch = Orchestrator(db_path=db_initialized)
+        result = orch._load_agent_output(str(tmp_path / "cache"), 99, "no_agent")
+        assert result == {}
+
+    def test_load_agent_output_returns_empty_on_invalid_json(self, db_initialized, tmp_path):
+        """_load_agent_output returns {} when output.json has invalid JSON."""
+        from clipper_agency.core.paths import agent_output_file
+
+        orch = Orchestrator(db_path=db_initialized)
+        ac = str(tmp_path / "cache")
+        out_path = Path(agent_output_file(ac, 1, "bad_agent"))
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text("{invalid json", encoding="utf-8")
+
+        result = orch._load_agent_output(ac, 1, "bad_agent")
+        assert result == {}
+
+    # ── _try_load_cached (lines 402-415) ──
+
+    def test_try_load_cached_returns_output_on_valid_cache(
+        self, db_initialized, tmp_path,
+    ):
+        """_try_load_cached returns cached output when validation passes."""
+        orch = Orchestrator(db_path=db_initialized)
+        cached_data = {"status": "completed", "from_cache": True}
+
+        with patch("clipper_agency.orchestrator.engine.validate_agent_cache") as mock_validate, \
+             patch.object(orch, "_load_agent_output", return_value=cached_data):
+            from clipper_agency.core.validation import ValidationResult
+            mock_validate.return_value = ValidationResult(passed=True)
+
+            result = orch._try_load_cached("/cache", 1, "scriptwriter")
+
+        assert result == cached_data
+
+    def test_try_load_cached_returns_empty_on_invalid_cache(
+        self, db_initialized,
+    ):
+        """_try_load_cached returns {} when cache validation fails."""
+        orch = Orchestrator(db_path=db_initialized)
+
+        with patch("clipper_agency.orchestrator.engine.validate_agent_cache") as mock_validate:
+            from clipper_agency.core.validation import ValidationResult
+            mock_validate.return_value = ValidationResult(
+                passed=False, issues=["missing artifact"],
+            )
+
+            result = orch._try_load_cached("/cache", 1, "scriptwriter")
+
+        assert result == {}
+
+    # ── _run_cached_or_fresh (lines 417-427) ──
+
+    def test_run_cached_or_fresh_skips_cache_when_false(self, db_initialized):
+        """use_cache=False calls run_fn directly, skipping cache lookup."""
+        orch = Orchestrator(db_path=db_initialized)
+        run_fn = MagicMock(return_value={"fresh": True})
+
+        with patch.object(orch, "_try_load_cached") as mock_cache:
+            result = orch._run_cached_or_fresh(
+                "agent", False, "/cache", 1, run_fn,
+            )
+
+        mock_cache.assert_not_called()
+        run_fn.assert_called_once()
+        assert result == {"fresh": True}
+
+    def test_run_cached_or_fresh_returns_cached_on_hit(self, db_initialized):
+        """use_cache=True with valid cache returns cached output, skips run_fn."""
+        orch = Orchestrator(db_path=db_initialized)
+        run_fn = MagicMock(return_value={"fresh": True})
+        cached = {"cached": True}
+
+        with patch.object(orch, "_try_load_cached", return_value=cached):
+            result = orch._run_cached_or_fresh(
+                "agent", True, "/cache", 1, run_fn,
+            )
+
+        run_fn.assert_not_called()
+        assert result == cached
+
+    def test_run_cached_or_fresh_falls_through_on_miss(self, db_initialized):
+        """use_cache=True with invalid cache falls through to run_fn."""
+        orch = Orchestrator(db_path=db_initialized)
+        run_fn = MagicMock(return_value={"fresh": True})
+
+        with patch.object(orch, "_try_load_cached", return_value={}):
+            result = orch._run_cached_or_fresh(
+                "agent", True, "/cache", 1, run_fn,
+            )
+
+        run_fn.assert_called_once()
+        assert result == {"fresh": True}
+
+    # ── _run_visual_director_phase (lines 429-452) ──
+
+    def test_visual_director_phase_handles_dict_sources(
+        self, db_initialized, tmp_path,
+    ):
+        """sources_data as dict with 'sources' key extracts URLs correctly."""
+        orch = Orchestrator(db_path=db_initialized)
+        research_output = {
+            "sources": {
+                "sources": [
+                    {"url": "https://a.com"},
+                    {"url": "https://b.com"},
+                ],
+            },
+        }
+        with patch.object(orch, "_run_visual_director") as mock_vd, \
+             patch.object(orch, "_complete_agent"):
+            mock_vd.return_value = {"status": "completed"}
+
+            orch._run_visual_director_phase(
+                get_connection(db_initialized), 1, "Topic",
+                research_output, {"script": []}, "/out", "/cache",
+            )
+
+        _, kwargs = mock_vd.call_args
+        assert kwargs["source_urls"] == ["https://a.com", "https://b.com"]
+
+    def test_visual_director_phase_handles_list_sources(
+        self, db_initialized, tmp_path,
+    ):
+        """sources_data as list uses the list directly."""
+        orch = Orchestrator(db_path=db_initialized)
+        research_output = {
+            "sources": [
+                {"url": "https://x.com"},
+                {"url": "https://y.com"},
+            ],
+        }
+        with patch.object(orch, "_run_visual_director") as mock_vd, \
+             patch.object(orch, "_complete_agent"):
+            mock_vd.return_value = {"status": "completed"}
+
+            orch._run_visual_director_phase(
+                get_connection(db_initialized), 1, "Topic",
+                research_output, {"script": []}, "/out", "/cache",
+            )
+
+        _, kwargs = mock_vd.call_args
+        assert kwargs["source_urls"] == ["https://x.com", "https://y.com"]
+
+    def test_visual_director_phase_handles_other_sources(
+        self, db_initialized, tmp_path,
+    ):
+        """sources_data as None or str defaults to empty URL list."""
+        orch = Orchestrator(db_path=db_initialized)
+        research_output = {"sources": None}
+
+        with patch.object(orch, "_run_visual_director") as mock_vd, \
+             patch.object(orch, "_complete_agent"):
+            mock_vd.return_value = {"status": "completed"}
+
+            orch._run_visual_director_phase(
+                get_connection(db_initialized), 1, "Topic",
+                research_output, {"script": []}, "/out", "/cache",
+            )
+
+        _, kwargs = mock_vd.call_args
+        assert kwargs["source_urls"] == []
+
+    # ── Pipeline exception handler (lines 386-389) ──
+
+    def test_pipeline_exception_handler(self, db_initialized):
+        """Top-level exception in run_pipeline returns FAILED status."""
+        orch = Orchestrator(db_path=db_initialized)
+
+        with patch.object(Orchestrator, "_run_safety") as mock_safety:
+            mock_safety.return_value = {"status": "pass", "reason": "Safe"}
+            # Make researcher raise an exception to hit the except block
+            with patch.object(
+                Orchestrator, "_run_researcher",
+                side_effect=RuntimeError("unexpected crash"),
+            ):
+                result = orch.run_pipeline(topic="Test", niche="test")
+
+        assert result["status"] == "failed"
+        assert "unexpected crash" in result.get("error", "")
+        assert result["job_id"] > 0
