@@ -429,7 +429,7 @@ class Orchestrator:
 
     def _run_visual_director_phase(
         self, conn: Any, job_id: int, topic: str,
-        research_output: dict[str, Any], script_output: dict[str, Any],
+        _research_output: dict[str, Any], script_output: dict[str, Any],
         output_dir: str, assets_cache: str,
     ) -> dict[str, Any]:
         """Run Visual Director agent: sources → visual output → complete."""

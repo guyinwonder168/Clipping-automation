@@ -60,28 +60,16 @@ class VisualDirectorAgent(BaseAgent):
 
         try:
             if research_contract_path:
-                # LLM-driven planning
-                compact_data = self._compact_research_data(
+                plan, assets = self._run_llm_planning(
+                    scenes, job_id, output_dir,
                     research_contract_path, research_brief_path,
+                    agent_dir,
                 )
-                plan = self._plan_with_llm(scenes, compact_data)
-                if agent_dir:
-                    write_json(f"{agent_dir}/scene_plan.json", plan)
-
-                scenes_dir = f"{agent_dir}/scenes" if agent_dir else f"{output_dir or 'outputs'}/job_{job_id}"
-                Path(scenes_dir).mkdir(parents=True, exist_ok=True)
-                assets = self._execute_plan(plan, scenes_dir)
+                pexels_videos: list[dict] = []
             else:
-                # LEGACY: sequential assignment (backward compat)
-                urls = source_urls or []
-                pexels_videos = self._search_pexels(topic)
-                plan = self._plan_scenes(scenes, urls, pexels_videos)
-                if agent_dir:
-                    write_json(f"{agent_dir}/scene_plan.json", plan)
-
-                scenes_dir = f"{agent_dir}/scenes" if agent_dir else f"{output_dir or 'outputs'}/job_{job_id}"
-                Path(scenes_dir).mkdir(parents=True, exist_ok=True)
-                assets = self._download_assets(plan, job_id, scenes_dir)
+                plan, assets, pexels_videos = self._run_legacy_planning(
+                    scenes, job_id, topic, output_dir, source_urls, agent_dir,
+                )
 
             clips = self._build_provenance(assets)
             output = {"status": "completed", "assets": assets}
@@ -95,7 +83,7 @@ class VisualDirectorAgent(BaseAgent):
                 }
                 if not research_contract_path:
                     provenance_data["pexels_results"] = len(pexels_videos)
-                    provenance_data["source_url_count"] = len(urls)
+                    provenance_data["source_url_count"] = len(source_urls or [])
                 write_json(f"{agent_dir}/provenance.json", provenance_data)
 
             logger.info("Visual: completed %d assets", len(assets))
@@ -103,6 +91,41 @@ class VisualDirectorAgent(BaseAgent):
         except Exception as e:
             logger.exception("Visual: asset sourcing failed")
             return {"status": "failed", "error": str(e), "assets": []}
+
+    def _run_llm_planning(
+        self, scenes: list[dict], job_id: int, output_dir: str,
+        research_contract_path: str, research_brief_path: str,
+        agent_dir: str,
+    ) -> tuple[list[dict], list[dict]]:
+        """LLM-driven planning path. Returns (plan, assets)."""
+        compact_data = self._compact_research_data(
+            research_contract_path, research_brief_path,
+        )
+        plan = self._plan_with_llm(scenes, compact_data)
+        if agent_dir:
+            write_json(f"{agent_dir}/scene_plan.json", plan)
+
+        scenes_dir = f"{agent_dir}/scenes" if agent_dir else f"{output_dir or 'outputs'}/job_{job_id}"
+        Path(scenes_dir).mkdir(parents=True, exist_ok=True)
+        assets = self._execute_plan(plan, scenes_dir)
+        return plan, assets
+
+    def _run_legacy_planning(
+        self, scenes: list[dict], job_id: int, topic: str,
+        output_dir: str, source_urls: list[str] | None,
+        agent_dir: str,
+    ) -> tuple[list[dict], list[dict], list[dict]]:
+        """Legacy sequential planning. Returns (plan, assets, pexels_videos)."""
+        urls = source_urls or []
+        pexels_videos = self._search_pexels(topic)
+        plan = self._plan_scenes(scenes, urls, pexels_videos)
+        if agent_dir:
+            write_json(f"{agent_dir}/scene_plan.json", plan)
+
+        scenes_dir = f"{agent_dir}/scenes" if agent_dir else f"{output_dir or 'outputs'}/job_{job_id}"
+        Path(scenes_dir).mkdir(parents=True, exist_ok=True)
+        assets = self._download_assets(plan, job_id, scenes_dir)
+        return plan, assets, pexels_videos
 
     def _search_pexels(self, topic: str) -> list[dict]:
         service = PexelsService()
@@ -233,7 +256,7 @@ class VisualDirectorAgent(BaseAgent):
             )
             return parsed.get("scenes", [])
 
-        except (json.JSONDecodeError, KeyError, Exception) as e:
+        except Exception as e:
             logger.warning("LLM planning failed, falling back to sequential: %s", e)
             urls = [v["url"] for v in compact_data.get("video_sources", [])]
             return self._plan_scenes(scenes, urls, [])
@@ -347,45 +370,65 @@ class VisualDirectorAgent(BaseAgent):
     ) -> dict | None:
         """Execute a single action. Returns {source, path} or None on failure."""
         action_type = action.get("type", "none")
-
-        if action_type == "tiktok_clip":
-            url = action.get("source_url", "")
-            if not url:
-                return None
-            output_path = f"{scenes_dir}/scene_{scene_id}.mp4"
-            result = ytdlp.download(url, output_path)
-            return {"source": "tiktok_clip", "path": result.path} if result else None
-
-        elif action_type == "pexels_video":
-            query = action.get("search_query", "")
-            if not query:
-                return None
-            try:
-                videos = pexels.search_videos(query, per_page=1)
-                if videos and videos[0].get("video_files"):
-                    video_url = videos[0]["video_files"][0]["link"]
-                    path = pexels.download_video(video_url, scenes_dir, f"scene_{scene_id}.mp4")
-                    return {"source": "pexels_video", "path": path} if path else None
-            except Exception:
-                pass
-            return None
-
-        elif action_type == "pexels_image":
-            query = action.get("search_query", "")
-            return self._fetch_image(query, scene_id, scenes_dir, pexels)
-
-        elif action_type == "text_card":
-            image_search = action.get("image_search", "")
-            image_result = self._fetch_image(image_search, scene_id, scenes_dir, pexels)
-            return {
-                "source": "text_card",
-                "path": image_result.get("path", "") if image_result else "",
-                "headline": action.get("headline", ""),
-                "style": action.get("style", "news_card"),
-                "bg_color": action.get("bg_color", ""),
-            }
-
+        handlers = {
+            "tiktok_clip": self._exec_tiktok_clip,
+            "pexels_video": self._exec_pexels_video,
+            "pexels_image": self._exec_pexels_image,
+            "text_card": self._exec_text_card,
+        }
+        handler = handlers.get(action_type)
+        if handler:
+            return handler(action, scene_id, scenes_dir, pexels, ytdlp)
         return None
+
+    def _exec_tiktok_clip(
+        self, action: dict, scene_id: int, scenes_dir: str,
+        _pexels: PexelsService, ytdlp: YtDlpService,
+    ) -> dict | None:
+        url = action.get("source_url", "")
+        if not url:
+            return None
+        output_path = f"{scenes_dir}/scene_{scene_id}.mp4"
+        result = ytdlp.download(url, output_path)
+        return {"source": "tiktok_clip", "path": result.path} if result else None
+
+    def _exec_pexels_video(
+        self, action: dict, scene_id: int, scenes_dir: str,
+        pexels: PexelsService, _ytdlp: YtDlpService,
+    ) -> dict | None:
+        query = action.get("search_query", "")
+        if not query:
+            return None
+        try:
+            videos = pexels.search_videos(query, per_page=1)
+            if videos and videos[0].get("video_files"):
+                video_url = videos[0]["video_files"][0]["link"]
+                path = pexels.download_video(video_url, scenes_dir, f"scene_{scene_id}.mp4")
+                return {"source": "pexels_video", "path": path} if path else None
+        except Exception:
+            pass
+        return None
+
+    def _exec_pexels_image(
+        self, action: dict, scene_id: int, scenes_dir: str,
+        pexels: PexelsService, _ytdlp: YtDlpService,
+    ) -> dict | None:
+        query = action.get("search_query", "")
+        return self._fetch_image(query, scene_id, scenes_dir, pexels)
+
+    def _exec_text_card(
+        self, action: dict, scene_id: int, scenes_dir: str,
+        pexels: PexelsService, _ytdlp: YtDlpService,
+    ) -> dict | None:
+        image_search = action.get("image_search", "")
+        image_result = self._fetch_image(image_search, scene_id, scenes_dir, pexels)
+        return {
+            "source": "text_card",
+            "path": image_result.get("path", "") if image_result else "",
+            "headline": action.get("headline", ""),
+            "style": action.get("style", "news_card"),
+            "bg_color": action.get("bg_color", ""),
+        }
 
     def _fetch_image(
         self, query: str, scene_id: int, scenes_dir: str,
