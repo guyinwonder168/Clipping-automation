@@ -109,3 +109,53 @@ class TestProbeVideo:
 
         assert info is None
         check_output.assert_not_called()
+
+    def test_probe_parses_sample_aspect_ratio(self, tmp_path, mocker):
+        video = tmp_path / "sar.mp4"
+        video.write_bytes(b"x" * 2048)
+
+        mocker.patch("subprocess.check_output", return_value=json.dumps({
+            "streams": [
+                {"codec_type": "video", "width": 1080, "height": 1920,
+                 "codec_name": "h264", "pix_fmt": "yuv420p",
+                 "sample_aspect_ratio": "7664:7665"},
+            ],
+            "format": {"duration": "10.0"},
+        }).encode())
+
+        info = probe_video(str(video), tmp_path)
+        assert info is not None
+        assert info.sample_aspect_ratio == "7664:7665"
+
+    def test_probe_defaults_sar_to_1_when_missing(self, tmp_path, mocker):
+        video = tmp_path / "nosar.mp4"
+        video.write_bytes(b"x" * 2048)
+
+        mocker.patch("subprocess.check_output", return_value=json.dumps({
+            "streams": [
+                {"codec_type": "video", "width": 1080, "height": 1920,
+                 "codec_name": "h264", "pix_fmt": "yuv420p"},
+            ],
+            "format": {"duration": "10.0"},
+        }).encode())
+
+        info = probe_video(str(video), tmp_path)
+        assert info is not None
+        assert info.sample_aspect_ratio == "1:1"
+
+    def test_probe_defaults_sar_to_1_when_0_1(self, tmp_path, mocker):
+        video = tmp_path / "invalidsar.mp4"
+        video.write_bytes(b"x" * 2048)
+
+        mocker.patch("subprocess.check_output", return_value=json.dumps({
+            "streams": [
+                {"codec_type": "video", "width": 1080, "height": 1920,
+                 "codec_name": "h264", "pix_fmt": "yuv420p",
+                 "sample_aspect_ratio": "0:1"},
+            ],
+            "format": {"duration": "10.0"},
+        }).encode())
+
+        info = probe_video(str(video), tmp_path)
+        assert info is not None
+        assert info.sample_aspect_ratio == "1:1"

@@ -69,7 +69,7 @@ class AppSettings(BaseSettings):
     # API keys
     openrouter_api_key: str = ""
     elevenlabs_api_key: str = ""
-    fish_audio_api_key: str = Field(default="", validation_alias="FISHAUDIO_KEY")
+    fish_audio_api_key: str = Field(default="", validation_alias="FISHAUDIO_API_KEY")
     pexels_api_key: str = ""
     firecrawl_api_key: str = ""
     scrapecreators_api_key: str = ""

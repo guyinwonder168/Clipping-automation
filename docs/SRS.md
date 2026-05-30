@@ -98,7 +98,7 @@
 | OpenRouter | LLM access for all agents | API key | Per-model limits |
 | ElevenLabs | Voice generation (primary) | API key | Free tier blocked — Starter plan ($5/mo) required for API access |
 | Google AI Studio Gemini TTS | Voice generation fallback after ElevenLabs | API key (`GEMINI_API_KEY`) | Google AI Studio quota/limits; default voice `GEMINI_TTS_VOICE_NAME=Kore` |
-| Fish Audio | Voice generation fallback after Gemini TTS | API key (`FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY`) | No free tier — Plus plan ($11/mo) required for API access |
+| Fish Audio | Voice generation fallback after Gemini TTS | API key (`FISHAUDIO_API_KEY`) | No free tier — Plus plan ($11/mo) required for API access |
 | Pexels API | Stock video/images fallback | API key (free) | 200 requests/hr |
 | yt-dlp | Video/audio download from 1000+ sites | None | Site-specific limits |
 | ScrapeCreators | TikTok video URLs, creator data, song metadata | API key (`x-api-key`) | 75 free credits; `trim=true` + field extraction reduces 1-2MB raw responses to ~500 chars/result |
@@ -116,7 +116,7 @@ Stage 2: + Serper. Stage 2+: + DuckDuckGo site-filtered.
 **Voice provider fallback:** `ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly`.
 - `ELEVENLABS_API_KEY` set → try `ElevenLabsService` first.
 - If ElevenLabs is missing or fails, `GEMINI_API_KEY` set → try `GeminiTTSService` (`gemini-2.5-flash-preview-tts`, default voice `Kore`).
-- If Gemini TTS is missing or fails, `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` set → try `FishAudioService` (s2-pro model, `/v1/tts` endpoint).
+- If Gemini TTS is missing or fails, `FISHAUDIO_API_KEY` set → try `FishAudioService` (s2-pro model, `/v1/tts` endpoint).
 - If all providers are missing or fail, pipeline stops with a clear error and sanitized attempts are persisted under the job workspace.
 
 ScrapeCreators credits reserved for TikTok video URLs, creator profiles, engagement data, and song metadata. Results cached with TTL to minimize credit burn. Researcher preserves raw ScrapeCreators/Firecrawl payloads and normalized research artifacts under `ASSETS_CACHE/job_{id}/agents/researcher/`.

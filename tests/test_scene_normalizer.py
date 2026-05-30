@@ -37,7 +37,8 @@ class TestSceneNormalizer:
         # Mock probe to report already-correct dimensions
         # probe_video is imported inside normalize() via lazy import from media_probe
         mocker.patch("clipper_agency.core.media_probe.probe_video",
-                     return_value=mocker.Mock(width=1080, height=1920))
+                     return_value=mocker.Mock(width=1080, height=1920,
+                                              sample_aspect_ratio="1:1"))
 
         mock_run = mocker.patch("subprocess.run")
         # Create a real file so the isfile check passes
@@ -84,6 +85,20 @@ class TestSceneNormalizer:
         assert result.success is False
         assert result.stderr is not None
 
+    def test_normalize_sets_sar_to_1(self, tmp_path, mocker):
+        """Filter chain ends with setsar=1 for consistent concat compatibility."""
+        mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(
+            returncode=0, stderr=b"", stdout=b""))
+
+        input_file = tmp_path / "in.mp4"
+        input_file.write_bytes(b"x" * 10000)
+
+        normalizer = SceneNormalizer()
+        normalizer.normalize(str(input_file), str(tmp_path / "out.mp4"))
+
+        cmd_args = " ".join(mock_run.call_args[0][0])
+        assert "setsar=1" in cmd_args
+
     def test_normalize_uses_force_original_aspect_ratio(self, tmp_path, mocker):
         """Scale filter includes force_original_aspect_ratio=decrease."""
         mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(
@@ -97,3 +112,22 @@ class TestSceneNormalizer:
 
         cmd_args = " ".join(mock_run.call_args[0][0])
         assert "force_original_aspect_ratio" in cmd_args
+
+    def test_normalize_does_not_skip_when_sar_not_1(self, tmp_path, mocker):
+        """Clip already 1080x1920 but with non-1:1 SAR must still be normalized."""
+        mocker.patch("clipper_agency.core.media_probe.probe_video",
+                      return_value=mocker.Mock(
+                          width=1080, height=1920,
+                          sample_aspect_ratio="7664:7665"))
+
+        mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(
+            returncode=0, stderr=b"", stdout=b""))
+
+        input_file = tmp_path / "in.mp4"
+        input_file.write_bytes(b"x" * 10000)
+
+        normalizer = SceneNormalizer()
+        result = normalizer.normalize(str(input_file), str(tmp_path / "out.mp4"))
+
+        assert result.success is True
+        mock_run.assert_called()

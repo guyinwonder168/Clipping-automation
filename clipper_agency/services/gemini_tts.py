@@ -4,6 +4,7 @@ import base64
 import logging
 import os
 import re
+import time
 import wave
 from pathlib import Path
 
@@ -31,17 +32,30 @@ class GeminiTTSService:
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        max_retries = 3
+        base_delay = 2.0
+
         logger.info("GeminiTTS: request — voice=%s text_len=%d", voice_name, len(text))
-        with httpx.Client(base_url=self.BASE_URL, timeout=120) as client:
-            resp = client.post(
-                f"/models/{self.MODEL}:generateContent",
-                headers={
-                    "x-goog-api-key": self.api_key,
-                    "Content-Type": "application/json",
-                },
-                json=self._payload(text, voice_name),
-            )
-            resp.raise_for_status()
+        for attempt in range(max_retries + 1):
+            with httpx.Client(base_url=self.BASE_URL, timeout=120) as client:
+                resp = client.post(
+                    f"/models/{self.MODEL}:generateContent",
+                    headers={
+                        "x-goog-api-key": self.api_key,
+                        "Content-Type": "application/json",
+                    },
+                    json=self._payload(text, voice_name),
+                )
+                if resp.status_code == 429 and attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(
+                        "GeminiTTS: rate limited (429), retry %d/%d in %.1fs",
+                        attempt + 1, max_retries, delay,
+                    )
+                    time.sleep(delay)
+                    continue
+                resp.raise_for_status()
+                break
 
         audio_data = self._extract_audio(resp.json())
         sample_rate = self._sample_rate(audio_data.get("mimeType", ""))

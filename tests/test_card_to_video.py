@@ -1,4 +1,6 @@
 """Tests for card-to-video conversion."""
+import subprocess
+
 import pytest
 from clipper_agency.core.card_to_video import card_to_video, CardVideoResult
 
@@ -99,3 +101,46 @@ class TestCardToVideo:
         cmd_args = " ".join(mock_run.call_args[0][0])
         assert "libx264" in cmd_args
         assert "yuv420p" in cmd_args
+
+    def test_ffmpeg_not_found(self, tmp_path, mocker):
+        """FileNotFoundError from subprocess.run returns failure."""
+        from PIL import Image
+        card_path = tmp_path / "card.png"
+        Image.new("RGB", (1080, 1920), (0, 0, 0)).save(card_path)
+
+        mocker.patch("subprocess.run", side_effect=FileNotFoundError)
+        output = tmp_path / "card.mp4"
+        result = card_to_video(str(card_path), str(output))
+
+        assert result.success is False
+        assert "FFmpeg not found" in result.error
+
+    def test_ffmpeg_timeout(self, tmp_path, mocker):
+        """TimeoutExpired from subprocess.run returns failure."""
+        from PIL import Image
+        card_path = tmp_path / "card.png"
+        Image.new("RGB", (1080, 1920), (0, 0, 0)).save(card_path)
+
+        mocker.patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ffmpeg", timeout=60))
+        output = tmp_path / "card.mp4"
+        result = card_to_video(str(card_path), str(output))
+
+        assert result.success is False
+        assert "timed out" in result.error
+
+    def test_probe_failure_returns_success_without_dimensions(self, tmp_path, mocker):
+        """Probe exception is swallowed; result still succeeds with no dimensions."""
+        from PIL import Image
+        card_path = tmp_path / "card.png"
+        Image.new("RGB", (1080, 1920), (0, 0, 0)).save(card_path)
+
+        mocker.patch("subprocess.run", return_value=mocker.Mock(
+            returncode=0, stderr=b"", stdout=b""))
+        mocker.patch("clipper_agency.core.media_probe.probe_video", side_effect=RuntimeError("probe crashed"))
+
+        output = tmp_path / "card.mp4"
+        result = card_to_video(str(card_path), str(output))
+
+        assert result.success is True
+        assert result.width is None
+        assert result.height is None

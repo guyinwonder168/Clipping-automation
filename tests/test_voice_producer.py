@@ -42,7 +42,7 @@ class TestVoiceProducerFallback:
         the first attempt should be elevenlabs and should complete."""
         monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
         monkeypatch.setenv("GEMINI_API_KEY", "gem-key")
-        monkeypatch.setenv("FISH_AUDIO_API_KEY", "fish-key")
+        monkeypatch.setenv("FISHAUDIO_API_KEY", "fish-key")
 
         agent = VoiceProducerAgent()
         with mock.patch.object(agent, "_create_service", return_value=_mock_service(True)):
@@ -93,7 +93,7 @@ class TestVoiceProducerFallback:
         clear failure status."""
         monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
         monkeypatch.setenv("GEMINI_API_KEY", "gem-key")
-        monkeypatch.setenv("FISH_AUDIO_API_KEY", "fish-key")
+        monkeypatch.setenv("FISHAUDIO_API_KEY", "fish-key")
 
         agent = VoiceProducerAgent()
 
@@ -124,7 +124,7 @@ class TestVoiceProducerFallback:
         # Ensure no keys
         monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
+        monkeypatch.delenv("FISHAUDIO_API_KEY", raising=False)
 
         agent = VoiceProducerAgent()
         result = agent.execute(
@@ -138,12 +138,12 @@ class TestVoiceProducerFallback:
         assert len(attempts) == 3
         assert all(a["status"] == "missing_key" for a in attempts)
 
-    def test_fish_audio_alias_key_enables_fish_provider(self, tmp_path, monkeypatch):
-        """The documented FISHAUDIO_KEY alias should pass pre-checks."""
+    def test_fish_audio_api_key_enables_fish_provider(self, tmp_path, monkeypatch):
+        """FISHAUDIO_API_KEY should enable fish_audio provider."""
         monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
-        monkeypatch.setenv("FISHAUDIO_KEY", "fish-alias-key")
+        monkeypatch.delenv("FISHAUDIO_API_KEY", raising=False)
+        monkeypatch.setenv("FISHAUDIO_API_KEY", "fish-key")
 
         agent = VoiceProducerAgent()
 
@@ -263,25 +263,83 @@ class TestVoiceProducerArtifacts:
             assert "voices" in p
 
     def test_partial_failure_after_some_scenes_generated(self, tmp_path, monkeypatch):
-        """If a provider fails mid-processing, partial results are returned."""
+        """If a provider fails mid-processing, partial results are returned
+        and overall status is 'failed' because not all scenes got audio."""
         monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
 
         agent = VoiceProducerAgent()
 
-        scene_1_ok = mock.MagicMock()
-        scene_1_ok.generate_voice.return_value = "/fake/scene_1.mp3"
-        scene_2_fail = mock.MagicMock()
-        scene_2_fail.generate_voice.side_effect = ValueError("timeout")
+        svc = mock.MagicMock()
+        svc.generate_voice.side_effect = [
+            "/fake/scene_1.mp3",
+            ValueError("timeout"),
+        ]
 
-        # First call to _create_service for provider returns working service,
-        # but the service fails on the second scene.
-        services = iter([scene_1_ok])
-
-        with mock.patch.object(agent, "_create_service", side_effect=lambda p: next(services)):
+        with mock.patch.object(agent, "_create_service", return_value=svc):
             result = agent.execute(
                 job_id=12,
                 script=SCENES,
                 assets_cache=str(tmp_path),
             )
 
-        assert result["status"] in ("failed", "completed")
+        assert result["status"] == "failed"
+        assert "/fake/scene_1.mp3" in result["audio_files"]
+        assert len(result["audio_files"]) == 1
+
+    def test_partial_success_preserves_completed_audio(self, tmp_path, monkeypatch):
+        """When a provider succeeds on scene 1 but fails on scene 2,
+        the completed audio is preserved and status is 'failed'."""
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("FISHAUDIO_API_KEY", raising=False)
+
+        agent = VoiceProducerAgent()
+
+        svc = mock.MagicMock()
+        svc.generate_voice.side_effect = [
+            "/fake/scene_1.mp3",
+            ValueError("429 rate limit"),
+        ]
+
+        with mock.patch.object(agent, "_create_service", return_value=svc):
+            result = agent.execute(
+                job_id=13,
+                script=SCENES,
+                assets_cache=str(tmp_path),
+            )
+
+        assert result["status"] == "failed"
+        assert result["audio_files"] == ["/fake/scene_1.mp3"]
+        assert len(result["audio_files"]) == 1
+        assert "error" in result
+
+    def test_partial_then_fallback_completes_remaining(self, tmp_path, monkeypatch):
+        """Provider A succeeds on scene 1, fails on scene 2.
+        Provider B picks up scene 2 and succeeds. Status is 'completed'."""
+        monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key")
+        monkeypatch.setenv("GEMINI_API_KEY", "gem-key")
+
+        agent = VoiceProducerAgent()
+
+        el_svc = mock.MagicMock()
+        el_svc.generate_voice.side_effect = [
+            "/fake/el_scene_1.mp3",
+            ValueError("timeout"),
+        ]
+        gemini_svc = mock.MagicMock()
+        gemini_svc.generate_voice.return_value = "/fake/gem_scene_2.mp3"
+
+        services = {"elevenlabs": el_svc, "gemini_tts": gemini_svc}
+
+        with mock.patch.object(agent, "_create_service",
+                               side_effect=lambda p: services[p]):
+            result = agent.execute(
+                job_id=14,
+                script=SCENES,
+                assets_cache=str(tmp_path),
+            )
+
+        assert result["status"] == "completed"
+        assert "/fake/el_scene_1.mp3" in result["audio_files"]
+        assert "/fake/gem_scene_2.mp3" in result["audio_files"]
+        assert len(result["audio_files"]) == 2

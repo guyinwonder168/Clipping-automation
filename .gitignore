@@ -20,6 +20,10 @@ coverage.xml
 # Auto-generated tool data
 .firecrawl/
 .memsearch/
+.opencode/
+.playwright-mcp/
+sonar-*
+.tmp/
 
 # OS
 .DS_Store

@@ -35,10 +35,12 @@ class SceneNormalizer:
             from clipper_agency.core.media_probe import probe_video
 
             info = probe_video(input_path, Path(input_path).parent)
+            sar_ok = info.sample_aspect_ratio == "1:1"
             if (
                 info
                 and info.width == self.TARGET_WIDTH
                 and info.height == self.TARGET_HEIGHT
+                and sar_ok
             ):
                 return NormalizeResult(path=input_path, success=True)
         except Exception:
@@ -53,7 +55,8 @@ class SceneNormalizer:
             (
                 f"scale={self.TARGET_WIDTH}:{self.TARGET_HEIGHT}"
                 ":force_original_aspect_ratio=decrease,"
-                f"pad={self.TARGET_WIDTH}:{self.TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
+                f"pad={self.TARGET_WIDTH}:{self.TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
+                "setsar=1"
             ),
             "-c:v",
             "libx264",
@@ -75,6 +78,7 @@ class SceneNormalizer:
                     stderr=proc.stderr.decode(errors="replace"),
                 )
             return NormalizeResult(path=output_path, success=True)
+        except FileNotFoundError:
             return NormalizeResult(
                 path=input_path, success=False, error="FFmpeg not found"
             )

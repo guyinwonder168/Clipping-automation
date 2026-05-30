@@ -117,8 +117,8 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 75 | Configurable TTS provider fallback now attempts ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly and persists sanitized provider attempts | PRD §5 PR-25, SRS §2 FR-06, SRS §4, Design §4, Design §9 |
 | 76 | `FishAudioService`: s2-pro model (`POST /v1/tts`), `reference_id` for voice model, Bearer auth, mp3 output | Design §2, Design §9 |
 | 77 | `_extract_fields()` handles both `aweme_info`-wrapped (full API) and flat (trim=true) responses via `source = item.get("aweme_info") or item`; trimmed responses have no music or hashtags | Design §4, SRS §2 FR-16 |
-| 78 | `AppSettings` fields: `fish_audio_api_key` (validation_alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id` | Design §9, SRS §5 |
-| 79 | Voice provider env var fallback: `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` (Fish Audio), `ELEVENLABS_API_KEY` (ElevenLabs) | SRS §4, Design §9 |
+| 78 | `AppSettings` fields: `fish_audio_api_key` (validation_alias `FISHAUDIO_API_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id` | Design §9, SRS §5 |
+| 79 | Voice provider env var fallback: `FISHAUDIO_API_KEY` (Fish Audio), `ELEVENLABS_API_KEY` (ElevenLabs) | SRS §4, Design §9 |
 | 80 | Free tier API blocked for both ElevenLabs (401 abuse detection) and Fish Audio (402 insufficient balance). Both require paid plans. | PRD §3, SRS §4 |
 
 ### From Phase 12 Artifact Contracts + Debug Observability

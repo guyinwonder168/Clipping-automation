@@ -49,7 +49,7 @@ Replace the dead `AppConfig` with `pydantic-settings` `BaseSettings` (`AppSettin
 
 - `pydantic-settings` is already a dependency of pydantic v2, so it adds zero new dependencies.
 - `load_dotenv()` at import time ensures all `os.getenv()` calls (including those in module-level code) see `.env` values.
-- `AppSettings` provides typed access to all env vars with validation, defaults, and `field_alias` support (e.g., `FISHAUDIO_KEY` aliased to `fish_audio_api_key`).
+- `AppSettings` provides typed access to all env vars with validation, defaults, and `field_alias` support (e.g., `FISHAUDIO_API_KEY` aliased to `fish_audio_api_key`).
 - Test isolation pattern `_env_file=None + patch.dict(os.environ, {}, clear=True)` is explicitly documented and enforced — prevents a class of flaky test bugs that plagued earlier phases.
 - Single path helper module (`clipper_agency/core/paths.py`) centralizes all cache/output directory logic, eliminating the hardcoded path duplication.
 

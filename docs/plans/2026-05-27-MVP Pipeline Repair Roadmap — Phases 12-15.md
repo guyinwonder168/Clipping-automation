@@ -182,7 +182,7 @@ If ELEVENLABS_API_KEY is missing → try Gemini TTS.
 If ElevenLabs returns non-200/API error → try Gemini TTS.
 If GEMINI_API_KEY is missing → try Fish Audio.
 If Gemini TTS returns non-200/API error → try Fish Audio.
-If FISH_AUDIO_API_KEY/FISHAUDIO_KEY is missing → fail clearly.
+If FISHAUDIO_API_KEY is missing → fail clearly.
 If Fish Audio returns non-200/API error → fail clearly.
 ```
 

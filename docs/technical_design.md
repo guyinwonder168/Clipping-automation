@@ -602,7 +602,7 @@ Below the agent-default level, the system loads base configuration from `.env` v
 
 - **`AppSettings`** (`pydantic-settings` `BaseSettings`) — typed config class at `clipper_agency/config/schema.py` mapping env vars 1:1 (uppercased) to fields.
 - **`load_dotenv()`** — called once at `clipper_agency/__main__.py` import time, before any service reads `os.getenv()`.
-- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `gemini_api_key`, `gemini_tts_voice_name`, `fish_audio_api_key` (alias `FISHAUDIO_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
+- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `gemini_api_key`, `gemini_tts_voice_name`, `fish_audio_api_key` (alias `FISHAUDIO_API_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
 - **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`. Agents read their model from `load_settings().<agent>_model` instead of hardcoding.
 - **Test isolation:** Tests must use both `AppSettings(_env_file=None)` and `patch.dict(os.environ, {}, clear=True)` to prevent the user's `.env` (loaded by `load_dotenv()` at import) from leaking into test expectations.
 - **Cache path helpers:** `clipper_agency/core/paths.py` provides `job_cache_dir()`, `agent_dir()`, `agent_input_file()`, `agent_output_file()`, `gate_result_file()`, `researcher_brief_file()`, `researcher_contract_file()`, `voice_scene_file()`, `visual_scene_file()`, and `job_final_output_dir()` for consistent per-job cache/final paths.
@@ -615,7 +615,7 @@ The `VoiceProducerAgent` attempts providers in order and records sanitized attem
 |----------|---------|---------|-------|
 | 1 (highest) | `ELEVENLABS_API_KEY` | `ElevenLabsService` | Configured voice ID |
 | 2 | `GEMINI_API_KEY` | `GeminiTTSService` | `gemini-2.5-flash-preview-tts`, default voice `Kore` |
-| 3 | `FISH_AUDIO_API_KEY` or `FISHAUDIO_KEY` | `FishAudioService` | `s2-pro` via `POST /v1/tts` |
+| 3 | `FISHAUDIO_API_KEY` | `FishAudioService` | `s2-pro` via `POST /v1/tts` |
 
 - **Fallback voice IDs** per provider: `elevenlabs_voice_id`, `gemini_tts_voice_name`, or `fish_audio_voice_id`.
 - If a provider key is missing or a provider returns an API/HTTP error, the agent tries the next provider.
