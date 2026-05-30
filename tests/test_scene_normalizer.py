@@ -84,6 +84,20 @@ class TestSceneNormalizer:
         assert result.success is False
         assert result.stderr is not None
 
+    def test_normalize_sets_sar_to_1(self, tmp_path, mocker):
+        """Filter chain ends with setsar=1 for consistent concat compatibility."""
+        mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(
+            returncode=0, stderr=b"", stdout=b""))
+
+        input_file = tmp_path / "in.mp4"
+        input_file.write_bytes(b"x" * 10000)
+
+        normalizer = SceneNormalizer()
+        normalizer.normalize(str(input_file), str(tmp_path / "out.mp4"))
+
+        cmd_args = " ".join(mock_run.call_args[0][0])
+        assert "setsar=1" in cmd_args
+
     def test_normalize_uses_force_original_aspect_ratio(self, tmp_path, mocker):
         """Scale filter includes force_original_aspect_ratio=decrease."""
         mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(

@@ -34,7 +34,7 @@ _PROVIDER_ORDER = ["elevenlabs", "gemini_tts", "fish_audio"]
 _PROVIDER_KEYS = {
     "elevenlabs": ("ELEVENLABS_API_KEY",),
     "gemini_tts": ("GEMINI_API_KEY",),
-    "fish_audio": ("FISH_AUDIO_API_KEY", "FISHAUDIO_KEY"),
+    "fish_audio": ("FISHAUDIO_API_KEY",),
 }
 
 
@@ -74,12 +74,13 @@ class VoiceProducerAgent(BaseAgent):
             scenes, voice_id, job_id, assets_cache,
         )
 
+        all_generated = len(audio_files) >= len(scenes)
         output = {
-            "status": "completed" if audio_files else "failed",
+            "status": "completed" if all_generated else "failed",
             "audio_files": audio_files,
             "attempts": attempts,
         }
-        if not audio_files:
+        if not all_generated:
             output["error"] = "All TTS providers failed"
 
         # Persist output contract
@@ -102,18 +103,30 @@ class VoiceProducerAgent(BaseAgent):
     ) -> tuple[list[dict], list[str]]:
         """Try each provider in priority order.
 
-        Returns (attempts, audio_files).
+        If a provider partially succeeds, remaining scenes are passed to the
+        next provider.  Returns (attempts, audio_files).
         """
         attempts: list[dict] = []
         audio_files: list[str] = []
+        remaining = list(scenes)
 
         for provider in _PROVIDER_ORDER:
-            attempt = self._try_provider(provider, scenes, voice_id,
+            if not remaining:
+                break
+
+            attempt = self._try_provider(provider, remaining, voice_id,
                                          job_id, assets_cache)
             attempts.append(attempt)
+
             if attempt["status"] == "success":
-                audio_files = attempt["audio_files"]
+                audio_files.extend(attempt["audio_files"])
                 break
+
+            if attempt["status"] == "partial":
+                completed_ids = attempt["completed_scene_ids"]
+                audio_files.extend(attempt["audio_files"])
+                remaining = [s for s in remaining
+                             if s.get("scene", 0) not in completed_ids]
 
         return attempts, audio_files
 
@@ -138,34 +151,47 @@ class VoiceProducerAgent(BaseAgent):
         resolved_voice = voice_id or _voice_ids.get(provider, "")
         logger.info("Voice: trying %s (%d scenes)", provider, len(scenes))
 
-        try:
-            service = self._create_service(provider)
-            audio_files = []
-            for scene in scenes:
-                text = scene.get("text", "")
-                scene_id = scene.get("scene", 0)
+        service = self._create_service(provider)
+        audio_files: list[str] = []
+        completed_ids: set[int] = set()
 
-                if assets_cache:
-                    voices_dir = os.path.join(
-                        ensure_agent_dir(assets_cache, job_id, "voice_producer"),
-                        "voices",
-                    )
-                    os.makedirs(voices_dir, exist_ok=True)
-                    output_path = os.path.join(voices_dir,
-                                               f"scene_{scene_id}.mp3")
-                else:
-                    output_path = f"outputs/job_{job_id}/scene_{scene_id}.mp3"
+        for scene in scenes:
+            text = scene.get("text", "")
+            scene_id = scene.get("scene", 0)
 
+            if assets_cache:
+                voices_dir = os.path.join(
+                    ensure_agent_dir(assets_cache, job_id, "voice_producer"),
+                    "voices",
+                )
+                os.makedirs(voices_dir, exist_ok=True)
+                output_path = os.path.join(voices_dir,
+                                           f"scene_{scene_id}.mp3")
+            else:
+                output_path = f"outputs/job_{job_id}/scene_{scene_id}.mp3"
+
+            try:
                 path = service.generate_voice(text, resolved_voice, output_path)
-                audio_files.append(path)
+            except Exception as exc:
+                logger.warning("Voice: %s — failed on scene %d: %s",
+                               provider, scene_id, exc)
+                if audio_files:
+                    return {
+                        "provider": provider,
+                        "status": "partial",
+                        "audio_files": audio_files,
+                        "completed_scene_ids": completed_ids,
+                        "error": str(exc),
+                    }
+                return {"provider": provider, "status": "failed",
+                        "error": str(exc), "audio_files": []}
 
-            logger.info("Voice: %s — completed %d files", provider, len(audio_files))
-            return {"provider": provider, "status": "success",
-                    "audio_files": audio_files}
-        except Exception as exc:
-            logger.warning("Voice: %s — failed: %s", provider, exc)
-            return {"provider": provider, "status": "failed",
-                    "error": str(exc), "audio_files": []}
+            audio_files.append(path)
+            completed_ids.add(scene_id)
+
+        logger.info("Voice: %s — completed %d files", provider, len(audio_files))
+        return {"provider": provider, "status": "success",
+                "audio_files": audio_files}
 
     # ── Service factory (kept for testability) ──
 
