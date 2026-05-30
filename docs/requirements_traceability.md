@@ -1,8 +1,8 @@
 # Clipper Agency — Requirements Traceability Matrix
 
-**Version:** 2.6
-**Date:** 2026-05-30
-**Status:** MVP Phase 15a Complete — Template Rendering Engine Integrated
+**Version:** 2.7
+**Date:** 2026-05-31
+**Status:** MVP Phase 16 Complete — Visual Director LLM Planning
 
 ---
 
@@ -165,6 +165,19 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | 103 | Composer agent routes template selection by niche config and script structure; runs FFmpeg preflight diagnostics before rendering | Design §4, Design §7, Design §13 |
 | 104 | All rendering tests offline: template loading, contract validation, primitive filter chains, thumbnail generation, adapter output, engine orchestration, composer template routing | SRS §3 NFR-09, Design §13 |
 
+### From Phase 16 Visual Director LLM Planning
+
+| # | Fact | New Location |
+|---|------|-------------|
+| 105 | Visual Director uses LLM to plan per-scene visual strategy: `_compact_research_data()` strips noise, `_plan_with_llm()` creates structured plan, `_execute_plan()` executes via dispatch table | SRS §2 FR-07, Design §4 |
+| 106 | Dispatch table action types: `tiktok_clip` (yt-dlp download), `pexels_video` (stock video), `pexels_image` (stock photo via `search_photos()`), `text_card` (Pillow-generated card with optional image) | SRS §2 FR-07, Design §4 |
+| 107 | 3-tier image fallback for text cards: Pexels photo search (`search_photos()`) → Firecrawl article og:image → gradient card background | SRS §2 FR-07, PRD §9, Design §4 |
+| 108 | `visual_director_model` config field added to `AppSettings` (default `mimo-v2-flash`); env var `VISUAL_DIRECTOR_MODEL` | SRS §2 FR-24, Design §9 |
+| 109 | Orchestrator engine passes `research_contract_path` + `research_brief_path` to Visual Director instead of raw source URLs | Design §4, Design §9 |
+| 110 | LLM planning failure returns `None` → routes to legacy `_plan_scenes()` + `_download_assets()` sequential path | SRS §2 FR-07, Design §4 |
+| 111 | Prompt files renamed `.txt` → `.md` for better editor support (safety, researcher, scriptwriter, reviewer); new `prompts/visual_director.md` for LLM planning prompt | Design §2, SRS §2 FR-07 |
+| 112 | `search_photos()` added to PexelsService for photo search (query, orientation, per_page) — enables text card image enrichment | SRS §4, Design §4 |
+
 ---
 
 ## Requirements Traceability Matrix
@@ -249,6 +262,10 @@ Every fact from the archived documents (`docs/old/25may2026/`) is mapped below. 
 | E20 | Downloaded file is corrupt or 0 bytes | G9 validates each asset (file size > 0), skips corrupt ones | Design §3 G9 |
 | E21 | No Pexels API key configured | Generated cards only. If no cards: hard-fail. | Design §3 G9 |
 | E21a | Scene normalization fails (wrong resolution/codec after re-encode) | Clip excluded from concat; provenance records failure. If no valid clips remain, G9 handles. | Design §7 |
+| E21b | Visual Director LLM returns invalid JSON or schema mismatch | `_plan_with_llm()` catches parse error, logs warning, returns `None` → falls back to legacy sequential planning | SRS §2 FR-07, Design §4 |
+| E21c | Visual Director LLM returns empty plan (0 actions) | Treated as LLM failure, falls back to legacy sequential planning | SRS §2 FR-07, Design §4 |
+| E21d | Visual Director dispatch encounters unknown action type | `_execute_action()` logs warning, skips unknown action, scene gets text_card fallback | SRS §2 FR-07, Design §4 |
+| E21e | All 3-tier image fallbacks fail for a text card (Pexels down, Firecrawl fails, gradient generator error) | Text card generated with plain colored background (no image); provenance records all failures | SRS §2 FR-07, Design §4 |
 
 ### Composer Edge Cases
 

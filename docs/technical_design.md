@@ -1,9 +1,9 @@
 # Clipper Agency — Technical Design Document
 
-**Version:** 3.6
-**Date:** 2026-05-28
-**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
-**Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`, `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
+**Version:** 3.7
+**Date:** 2026-05-31
+**Status:** MVP Phase 16 Complete — Visual Director LLM Planning
+**Related:** `docs/PRD.md`, `docs/SRS.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-31-visual-director-llm-planning-design.md`, `docs/plans/2026-05-31-visual-director-llm-planning-impl-plan.md`
 
 ---
 
@@ -63,7 +63,7 @@ OUTPUT_DIR/job_{id}/     # final customer-ready package only
 | **LLM Access** | OpenRouter API | Large Language Model (LLM) access, multi-model, single key |
 | **Secrets** | `python-dotenv` + `pydantic-settings` `AppSettings` | `.env` loaded at CLI entry (`__main__.py`); services use `os.getenv()`. No secrets in DB. |
 | **Logging** | Python `logging` + `clipper_agency/core/logging.py` | `setup_logging()` + `get_logger()`. All agents, services, orchestrator, and LLM client log at DEBUG/INFO/ERROR. Configurable via `LOG_LEVEL` env var. |
-| **Prompts** | Filesystem (`prompts/`) | Git-tracked, versioned |
+| **Prompts** | Filesystem (`prompts/*.md`) | Git-tracked, versioned, Markdown format |
 | **Container** | Docker Compose | VPS-ready |
 
 ### External Services (MVP Required)
@@ -307,10 +307,26 @@ Required before enabling those commands:
 | **Researcher** | Gathers context + source URLs + music candidates. MVP: ScrapeCreators (`trim=true` + field extraction via `_extract_fields()` handling both `aweme_info`-wrapped and flat trimmed responses, max 20 results) + Firecrawl (lean url/title/desc only). Cache-first: reads/writes raw responses, `research_brief.md`, `research_contract.json`, and normalized files under `ASSETS_CACHE/job_{id}/agents/researcher/`. Token guard: `MAX_SOURCE_CHARS=40000` prevents LLM overflow. Returns structured data with entities, tags, risk_flags, cache_key. | Budget East | TTL-based + job workspace file cache |
 | **Scriptwriter** | Writes script + caption in niche tone. Rotates angle from creative history. Always fresh. | Budget East | Never |
 | **Voice Producer** | Generates voiceover via provider fallback: ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly. `GeminiTTSService` uses `gemini-2.5-flash-preview-tts` with configured voice (default `Kore`) and wraps PCM audio as WAV when needed. `FishAudioService` uses `s2-pro` model, `POST /v1/tts`, `reference_id` for voice model. Voice files and sanitized `provider_attempts.json` are saved under `ASSETS_CACHE/job_{id}/agents/voice_producer/`. Always fresh. | API cost | Never |
-| **Visual Director** | Selects assets, plans scene sequence. MVP: yt-dlp + Pexels/local fallback. | Budget East | Never |
+| **Visual Director** | LLM-driven visual planning: compacts research data, uses LLM (`visual_director_model`) to plan per-scene visual strategy, executes via dispatch table (tiktok_clip, pexels_video, pexels_image, text_card). 3-tier image fallback for text cards (Pexels photo → Firecrawl article image → gradient). Falls back to legacy sequential planning on LLM failure. | Budget East | Never |
 | **Composer** | FFmpeg assembly: scenes, transitions, captions, audio mixing, thumbnail. Template-driven rendering via `clipper_agency/rendering/` with per-template adapters. | N/A | Never |
 | **Reviewer** | Quality + safety + duplicate check. Multimodal (video + text). Max 2 human-triggered retries. | Moderate | Never |
 | **Creative Director** | Stage 2. Proposes new angles/templates when variation exhausted. | Agentic East | Triggered |
+
+### Visual Director LLM Planning (Phase 16)
+
+The Visual Director uses LLM-driven planning to intelligently select visual assets per scene, replacing the original blind sequential URL assignment.
+
+**Flow:**
+
+1. **`_compact_research_data()`** — reads `research_contract.json` + `research_brief.md`, strips noise (raw HTML, boilerplate), sorts sources by engagement relevance, returns compact text block (~2K chars) for LLM context.
+2. **`_plan_with_llm()`** — sends compact research + script scenes + niche config to LLM with structured output schema. LLM returns per-scene plan with `action.type` (enum: `tiktok_clip`, `pexels_video`, `pexels_image`, `text_card`), `reasoning` (free text), and action-specific parameters. Returns `None` on failure.
+3. **`_execute_plan()`** + **`_execute_action()`** — dispatch table routes each action to handler (`_exec_tiktok_clip`, `_exec_pexels_video`, `_exec_pexels_image`, `_exec_text_card`). Each handler downloads/generates the visual asset.
+4. **3-tier image fallback** (for `text_card` actions): `_fetch_image()` tries Pexels photo search (`search_photos()`) → Firecrawl article og:image → gradient card background.
+5. **Legacy fallback**: `_run_legacy_planning()` uses the original sequential URL assignment + Pexels fallback when LLM planning fails or returns `None`.
+
+**Design principle:** "Orchestrator dumb, agents smart." The engine passes research file paths to Visual Director; the agent decides how to use them.
+
+**Configuration:** `visual_director_model` in `AppSettings` controls which LLM is used. Default: `mimo-v2-flash`.
 
 ### Researcher Structured Output
 
@@ -333,7 +349,7 @@ Query construction is config-driven: the niche profile defines search terms, lan
 | **Researcher** | Topic, niche config, cached research (if fresh); persisted as `agents/researcher/input.json` | Markdown brief (`research_brief.md`), raw provider payloads, normalized files, `research_contract.json`, and `output.json` | Empty result → G5 handles |
 | **Scriptwriter** | Researcher contract/output, creative history; persisted as `agents/scriptwriter/input.json` | `script.json`, `caption.txt`, `hashtags.json`, selected angle, and `output.json` | N/A (always produces output) |
 | **Voice Producer** | Validated script text, voice_id from config; persisted as `agents/voice_producer/input.json` | Voice files under `agents/voice_producer/voices/`, `provider_attempts.json`, duration metadata, and `output.json` | All providers fail → stop, retry by Admin/Creative Lead |
-| **Visual Director** | Researcher video_sources, Pexels query from tags, local asset paths, generated card config; persisted as `agents/visual_director/input.json` | `scene_plan.json`, `provenance.json`, scene files under `scenes/`, cards under `cards/`, and `output.json` | Download failures → G9 handles |
+| **Visual Director** | Researcher research_contract_path + research_brief_path, Pexels query from tags, local asset paths, generated card config; persisted as `agents/visual_director/input.json` | `visual_plan.json` (LLM decisions with reasoning), `scene_plan.json`, `provenance.json`, scene files under `scenes/`, cards under `cards/`, and `output.json` | Download failures → G9 handles |
 | **Composer** | Validated audio file, scene plan, template config, caption text; persisted as `agents/composer/input.json` | Final `OUTPUT_DIR/job_{id}/video.mp4`, plus `ffmpeg_command.txt`, `ffmpeg_stderr.log`, template diagnostics (`template_config.json`, `render_plan.json`, `ffmpeg_filtergraph.txt`), and `output.json` in job workspace | FFmpeg failure → stop, retry by Admin/Creative Lead |
 | **Reviewer** | Rendered video file, script text, caption, creative history; persisted as `agents/reviewer/input.json` | Pass/reject + specific issues + recommended retry step; persisted as `agents/reviewer/output.json` + `review.md` | Reject → Admin/Creative Lead decides |
 
@@ -602,7 +618,7 @@ Below the agent-default level, the system loads base configuration from `.env` v
 
 - **`AppSettings`** (`pydantic-settings` `BaseSettings`) — typed config class at `clipper_agency/config/schema.py` mapping env vars 1:1 (uppercased) to fields.
 - **`load_dotenv()`** — called once at `clipper_agency/__main__.py` import time, before any service reads `os.getenv()`.
-- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `gemini_api_key`, `gemini_tts_voice_name`, `fish_audio_api_key` (alias `FISHAUDIO_API_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`).
+- **Fields:** `db_path`, `assets_cache`, `output_dir`, `dashboard_secret_key`, `dashboard_username`, `dashboard_password`, `llm_api_key`, `elevenlabs_api_key`, `gemini_api_key`, `gemini_tts_voice_name`, `fish_audio_api_key` (alias `FISHAUDIO_API_KEY`), `fish_audio_voice_id`, `elevenlabs_voice_id`, `pexels_api_key`, `scrapecreators_api_key`, `firecrawl_api_key`, `log_level`, `safety_model` (default `mimo-v2-flash`), `researcher_model` (default `mimo-v2-flash`), `scriptwriter_model` (default `mimo-v2-flash`), `reviewer_model` (default `mimo-v2-flash`), `visual_director_model` (default `mimo-v2-flash`).
 - **Usage:** CLI (`__main__.py`) and dashboard (`app.py`) call `load_settings()` to resolve paths and secrets. Services read keys directly via `os.getenv()`. Agents read their model from `load_settings().<agent>_model` instead of hardcoding.
 - **Test isolation:** Tests must use both `AppSettings(_env_file=None)` and `patch.dict(os.environ, {}, clear=True)` to prevent the user's `.env` (loaded by `load_dotenv()` at import) from leaking into test expectations.
 - **Cache path helpers:** `clipper_agency/core/paths.py` provides `job_cache_dir()`, `agent_dir()`, `agent_input_file()`, `agent_output_file()`, `gate_result_file()`, `researcher_brief_file()`, `researcher_contract_file()`, `voice_scene_file()`, `visual_scene_file()`, and `job_final_output_dir()` for consistent per-job cache/final paths.

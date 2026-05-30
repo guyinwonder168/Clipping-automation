@@ -1,9 +1,9 @@
 # Clipper Agency — Product Requirements Document
 
-**Version:** 2.5
-**Date:** 2026-05-28
-**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
-**Related:** `docs/SRS.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`, `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
+**Version:** 2.6
+**Date:** 2026-05-31
+**Status:** MVP Phase 16 Complete — Visual Director LLM Planning
+**Related:** `docs/SRS.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-31-visual-director-llm-planning-design.md`, `docs/plans/2026-05-31-visual-director-llm-planning-impl-plan.md`
 
 ---
 
@@ -77,7 +77,7 @@ Intermediate execution material is not part of the final upload package. Each jo
 | ID | Requirement | Priority | Stage |
 |----|-------------|----------|-------|
 | PR-01 | Automated video generation from trending topics via gated agent pipeline | P0 | MVP |
-| PR-02 | Agent pipeline: Safety → Researcher → Post-Research Risk Gate → Scriptwriter → Voice → Visual → Compose → Review. Each step gated with pass/soft-fail/hard-fail rules. See `docs/technical_design.md` §3 for full gate definitions. | P0 | MVP |
+| PR-02 | Agent pipeline: Safety → Researcher → Post-Research Risk Gate → Scriptwriter → Voice → Visual (LLM-driven per-scene planning) → Compose → Review. Each step gated with pass/soft-fail/hard-fail rules. See `docs/technical_design.md` §3 for full gate definitions. | P0 | MVP |
 | PR-03 | Web dashboard for job management and agent configuration | P0 | MVP |
 | PR-04 | CLI for direct pipeline execution | P0 | MVP |
 | PR-05 | Ready-to-upload output package (video + caption + thumbnail + metadata) | P0 | MVP |
@@ -176,6 +176,7 @@ When no source clips or stock footage are available, the Visual Director generat
 - **Style:** Matches niche template (fonts, colors, layout from niche config).
 - **Usage:** Integrated into scene sequence by Composer as full-screen slides between other clips.
 - **Quality signal:** If a job uses only generated cards (no real clips or stock footage), the risk warning is escalated and the Reviewer is notified.
+- **Relevant images:** Text cards attempt to include a relevant image via 3-tier fallback: Pexels photo search (`search_photos()`) → Firecrawl article og:image → gradient card background.
 
 ---
 

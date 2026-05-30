@@ -1,9 +1,9 @@
 # Clipper Agency — Software Requirements Specification
 
-**Version:** 2.5
-**Date:** 2026-05-28
-**Status:** MVP Repair In Progress — Phase 12 Artifact Contracts + Debug Observability
-**Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-26-mvp-implementation.md`, `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
+**Version:** 2.6
+**Date:** 2026-05-31
+**Status:** MVP Phase 16 Complete — Visual Director LLM Planning
+**Related:** `docs/PRD.md`, `docs/technical_design.md`, `docs/requirements_traceability.md`, `docs/plans/2026-05-31-visual-director-llm-planning-design.md`, `docs/plans/2026-05-31-visual-director-llm-planning-impl-plan.md`
 
 ---
 
@@ -34,7 +34,7 @@
 | FR-04 | Post-research risk gate: second safety check after real entities/claims/URLs are known | P0 | MVP |
 | FR-05 | Scriptwriter Agent writes script + caption in niche tone, rotates angle from creative history | P0 | MVP |
 | FR-06 | Voice Producer generates voiceover only after script validation using fallback order: ElevenLabs → Google AI Studio Gemini TTS → Fish Audio → fail clearly | P0 | MVP |
-| FR-07 | Visual Director downloads assets via yt-dlp + Pexels/local fallback, plans scene sequence | P0 | MVP |
+| FR-07 | Visual Director uses LLM to plan per-scene visual strategy from compacted research data, then executes plan with dispatch table (tiktok_clip, pexels_video, pexels_image, text_card). 3-tier image fallback for text cards: Pexels photo search → Firecrawl article image → gradient card. Falls back to legacy sequential planning when LLM unavailable. Configurable via `VISUAL_DIRECTOR_MODEL` env var | P0 | MVP |
 | FR-08 | Composer assembles video via FFmpeg: scenes, transitions, captions, audio mixing, thumbnail. Template-driven rendering via `clipper_agency/rendering/` engine with per-template adapters (News Card, B-Roll Narration, Rapid Update) for structured caption overlays, transitions, and template thumbnails | P0 | MVP |
 | FR-09 | Reviewer Agent performs quality + safety + duplicate check (multimodal). Max 2 retries by Admin/Creative Lead | P0 | MVP |
 | FR-10 | Output packager produces `video.mp4` + `caption.txt` + `thumbnail.png` + `metadata.json` | P0 | MVP |
@@ -65,7 +65,7 @@
 |----|-------------|----------|-------|
 | FR-22 | Configuration hierarchy: Agent defaults → Niche → Account → Job-level overrides | P0 | MVP |
 | FR-23 | All agent settings configurable per level (LLM model, prompt version, temperature, max tokens, voice ID) | P0 | MVP |
-| FR-24 | Per-agent LLM model configuration via environment variables (`SAFETY_MODEL`, `RESEARCHER_MODEL`, `SCRIPTWRITER_MODEL`, `REVIEWER_MODEL`) with sensible defaults | P0 | MVP |
+| FR-24 | Per-agent LLM model configuration via environment variables (`SAFETY_MODEL`, `RESEARCHER_MODEL`, `SCRIPTWRITER_MODEL`, `REVIEWER_MODEL`, `VISUAL_DIRECTOR_MODEL`) with sensible defaults | P0 | MVP |
 | FR-25 | Structured logging for all external API calls, agent executions, and pipeline state transitions with configurable log level (`LOG_LEVEL`) | P0 | MVP |
 | FR-26 | Config versioning with diff and rollback | P0 | MVP |
 | FR-27 | Niche profiles swappable without code changes | P0 | MVP |
@@ -99,7 +99,7 @@
 | ElevenLabs | Voice generation (primary) | API key | Free tier blocked — Starter plan ($5/mo) required for API access |
 | Google AI Studio Gemini TTS | Voice generation fallback after ElevenLabs | API key (`GEMINI_API_KEY`) | Google AI Studio quota/limits; default voice `GEMINI_TTS_VOICE_NAME=Kore` |
 | Fish Audio | Voice generation fallback after Gemini TTS | API key (`FISHAUDIO_API_KEY`) | No free tier — Plus plan ($11/mo) required for API access |
-| Pexels API | Stock video/images fallback | API key (free) | 200 requests/hr |
+| Pexels API | Stock video/images fallback + photo search for text card images (`search_photos()`) | API key (free) | 200 requests/hr |
 | yt-dlp | Video/audio download from 1000+ sites | None | Site-specific limits |
 | ScrapeCreators | TikTok video URLs, creator data, song metadata | API key (`x-api-key`) | 75 free credits; `trim=true` + field extraction reduces 1-2MB raw responses to ~500 chars/result |
 | Firecrawl | Web search + structured page scraping | API key | Daily free runs |
