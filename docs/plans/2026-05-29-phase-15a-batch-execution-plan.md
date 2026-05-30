@@ -48,7 +48,7 @@ Branch: `phase/15a-template-foundation`
 | T4 | `clipper_agency/rendering/thumbnails.py`, `tests/test_rendering_thumbnails.py` | T2 |
 | T5 | (verification only) | T1 + T2 + T3 + T4 |
 
-### Batch 1.1 — T1 + T2 (parallel, independent files)
+### Batch 1.1 — T1 + T2 (parallel, independent files) ✅
 
 **Dispatch two CoderAgents simultaneously:**
 
@@ -130,7 +130,7 @@ Prompt:
 
 ---
 
-### Batch 1.2 — T3 + T4 (parallel, independent files)
+### Batch 1.2 — T3 + T4 (parallel, independent files) ✅
 
 **Dispatch two CoderAgents simultaneously:**
 
@@ -207,7 +207,7 @@ Prompt:
 
 ---
 
-### Batch 1.3 — T5: Verification + PR
+### Batch 1.3 — T5: Verification + PR ✅
 
 Run locally:
 
@@ -261,7 +261,7 @@ Branch: `phase/15a-template-adapters` (from updated `master` after PR 1 merge)
 | T9 | `clipper_agency/rendering/engine.py`, `tests/test_rendering_engine.py` | T1 + T2 (contracts/models) |
 | T10 | fixture tests in `tests/test_rendering_engine.py` | T6 + T7 + T8 + T9 |
 
-### Batch 2.1 — T6 + T7 + T8 (parallel, 3 adapters)
+### Batch 2.1 — T6 + T7 + T8 (parallel, 3 adapters) ✅
 
 **Dispatch three CoderAgents simultaneously.** Each creates its own adapter file and appends its tests to `tests/test_rendering_adapters.py`. All share the same skill/context requirements:
 
@@ -287,7 +287,7 @@ Agent E creates `renderers/__init__.py`; Agents F and G only create their adapte
 
 **Wait for ALL three agents to complete before proceeding.**
 
-### Batch 2.2 — T9: Engine
+### Batch 2.2 — T9: Engine ✅
 
 Single CoderAgent. Same skill/context requirements as above.
 
@@ -304,7 +304,7 @@ Prompt:
   Return: commit hash, test count.
 ```
 
-### Batch 2.3 — T10: Fixtures + Verification + PR
+### Batch 2.3 — T10: Fixtures + Verification + PR ✅
 
 Run locally (orchestrator role — load `verification-before-completion` before claiming success):
 
@@ -353,7 +353,7 @@ Branch: `phase/15a-composer-template-integration` (from updated `master` after P
 | T16 | modify `docs/requirements_traceability.md` | T11 |
 | T17 | full verification + PR | T11–T16 all |
 
-### Batch 3.1 — T11: Composer routing
+### Batch 3.1 — T11: Composer routing ✅
 
 Single CoderAgent.
 
@@ -370,7 +370,7 @@ Prompt:
   Return: commit hash, test count.
 ```
 
-### Batch 3.2 — T12: Diagnostics
+### Batch 3.2 — T12: Diagnostics ✅
 
 Single CoderAgent. Depends on T11.
 
@@ -387,7 +387,7 @@ Prompt:
   Return: commit hash, test count.
 ```
 
-### Batch 3.3 — T13 + T14 + T15 + T16 (parallel, 4 docs/metadata tasks)
+### Batch 3.3 — T13 + T14 + T15 + T16 (parallel, 4 docs/metadata tasks) ✅
 
 Dispatch four agents simultaneously. All independent files, no conflicts. Different skill/context requirements:
 
@@ -403,7 +403,7 @@ Branch: `phase/15a-composer-template-integration`
 
 **Wait for ALL four agents to complete before proceeding.**
 
-### Batch 3.4 — T17: Verification + PR
+### Batch 3.4 — T17: Verification + PR ✅
 
 Run locally (orchestrator role — load `verification-before-completion` before claiming success):
 
@@ -428,11 +428,13 @@ gh pr create --base master --title "Phase 15a: Composer template rendering integ
 
 | PR | Batches | Parallel tasks | Skills loaded per CoderAgent |
 |----|---------|----------------|------------------------------|
-| PR 1 | 3 | T1+T2 → T3+T4 → T5 | `test-driven-development`, `verification-before-completion`, `code-quality.md`, `test-coverage.md` |
-| PR 2 | 3 | T6+T7+T8 → T9 → T10 | same as PR 1 |
-| PR 3 | 4 | T11 → T12 → T13+T14+T15+T16 → T17 | T11-T13: same as PR 1; T14-T16: `documentation.md` + `verification-before-completion` |
+| PR 1 ✅ | 3 | T1+T2 → T3+T4 → T5 | `test-driven-development`, `verification-before-completion`, `code-quality.md`, `test-coverage.md` |
+| PR 2 ✅ | 3 | T6+T7+T8 → T9 → T10 | same as PR 1 |
+| PR 3 ✅ | 4 | T11 → T12 → T13+T14+T15+T16 → T17 | T11-T13: same as PR 1; T14-T16: `documentation.md` + `verification-before-completion` |
 | **Total** | **10 batches** | up to 4 parallel | — |
 
 Orchestrator (you, coordinating batches): loads `dispatching-parallel-agents` for dispatch pattern, `verification-before-completion` for each PR merge gate.
 
 Each PR must merge before the next starts (SonarCloud gate). Total: 3 PRs × (batches + review latency).
+
+> **Result:** All 3 PRs merged to master. 568 offline tests pass. SonarCloud QG green. Phase 15a complete.

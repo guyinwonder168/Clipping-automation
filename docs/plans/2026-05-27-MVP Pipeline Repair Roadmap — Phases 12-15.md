@@ -1316,7 +1316,7 @@ git commit -m "feat: add cli job debug commands"
 
 ---
 
-## Task 16: Document Retry/Resume as Follow-Up Scope
+## Task 16: Document Retry/Resume as Follow-Up Scope ✅
 
 **Files:**
 - Modify: `docs/design/evolution_plan.md`
@@ -1354,7 +1354,7 @@ git commit -m "docs: document job retry and resume follow-up"
 
 ---
 
-## Task 17: Add ADR for Job Workspace Artifact Contract
+## Task 17: Add ADR for Job Workspace Artifact Contract ✅
 
 **Files:**
 - Create: `docs/adr/0012-use-assets-cache-job-workspace.md`
@@ -1382,7 +1382,7 @@ git commit -m "docs: add adr for job artifact workspace"
 
 ---
 
-## Task 18: Full Verification
+## Task 18: Full Verification ✅
 
 **Files:**
 - No direct file edits unless failures reveal approved fixes are needed.

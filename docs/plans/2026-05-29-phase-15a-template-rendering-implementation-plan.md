@@ -44,7 +44,7 @@ Branch: `phase/15a-template-foundation`
 
 Purpose: create the reusable template loading, contracts, primitives, and asset-generation foundation without Composer integration.
 
-### Task 1: Add strict rendering template loader
+### Task 1: Add strict rendering template loader ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/__init__.py`
@@ -180,7 +180,7 @@ git commit -m "feat: add render template loader"
 
 ---
 
-### Task 2: Add render contract models
+### Task 2: Add render contract models ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/contracts.py`
@@ -262,7 +262,7 @@ git commit -m "feat: add render contract models"
 
 ---
 
-### Task 3: Add shared rendering primitives
+### Task 3: Add shared rendering primitives ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/primitives.py`
@@ -325,7 +325,7 @@ git commit -m "feat: add render primitives"
 
 ---
 
-### Task 4: Add thumbnail/card generator wrapper
+### Task 4: Add thumbnail/card generator wrapper ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/thumbnails.py`
@@ -399,7 +399,7 @@ git commit -m "feat: add template thumbnail generation"
 
 ---
 
-### Task 5: Run PR 1 targeted and offline verification
+### Task 5: Run PR 1 targeted and offline verification ✅
 
 **Files:**
 - No new files expected.
@@ -457,7 +457,7 @@ Start after PR 1 is merged and local `master` is pulled.
 
 Purpose: implement three thin template adapters and a standalone deterministic FFmpeg renderer before touching Composer.
 
-### Task 6: Add renderer package and News Card adapter
+### Task 6: Add renderer package and News Card adapter ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/renderers/__init__.py`
@@ -543,7 +543,7 @@ git commit -m "feat: add news card render adapter"
 
 ---
 
-### Task 7: Add B-Roll Narration adapter
+### Task 7: Add B-Roll Narration adapter ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/renderers/b_roll_narration.py`
@@ -605,7 +605,7 @@ git commit -m "feat: add b-roll narration render adapter"
 
 ---
 
-### Task 8: Add Rapid Update adapter
+### Task 8: Add Rapid Update adapter ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/renderers/rapid_update.py`
@@ -666,7 +666,7 @@ git commit -m "feat: add rapid update render adapter"
 
 ---
 
-### Task 9: Add standalone FFmpeg render engine
+### Task 9: Add standalone FFmpeg render engine ✅
 
 **Files:**
 - Create: `clipper_agency/rendering/engine.py`
@@ -752,7 +752,7 @@ git commit -m "feat: add standalone render engine"
 
 ---
 
-### Task 10: Add deterministic standalone render fixture tests
+### Task 10: Add deterministic standalone render fixture tests ✅
 
 **Files:**
 - Modify: `tests/test_rendering_engine.py`
@@ -823,7 +823,7 @@ Start after PR 2 is merged and local `master` is pulled.
 
 Purpose: route Composer through template rendering, persist diagnostics, update package metadata, and update docs/ADR/traceability.
 
-### Task 11: Integrate template plan selection into Composer
+### Task 11: Integrate template plan selection into Composer ✅
 
 **Files:**
 - Modify: `clipper_agency/agents/composer.py`
@@ -901,7 +901,7 @@ git commit -m "feat: route composer through template renderer"
 
 ---
 
-### Task 12: Persist Composer template diagnostics
+### Task 12: Persist Composer template diagnostics ✅
 
 **Files:**
 - Modify: `clipper_agency/agents/composer.py`
@@ -969,7 +969,7 @@ git commit -m "feat: persist template render diagnostics"
 
 ---
 
-### Task 13: Update final package metadata and thumbnail treatment
+### Task 13: Update final package metadata and thumbnail treatment ✅
 
 **Files:**
 - Modify: `clipper_agency/orchestrator/engine.py`
@@ -1034,7 +1034,7 @@ Only include `clipper_agency/output/packager.py` if it changed.
 
 ---
 
-### Task 14: Update product and technical docs where needed
+### Task 14: Update product and technical docs where needed ✅
 
 **Files:**
 - Modify: `docs/plans/2026-05-27-MVP Pipeline Repair Roadmap — Phases 12-15.md`
@@ -1076,7 +1076,7 @@ Only include files that changed.
 
 ---
 
-### Task 15: Add ADR for template-driven rendering architecture
+### Task 15: Add ADR for template-driven rendering architecture ✅
 
 **Files:**
 - Create: `docs/adr/0013-use-yaml-ffmpeg-pillow-template-rendering.md`
@@ -1115,7 +1115,7 @@ git commit -m "docs: add template rendering ADR"
 
 ---
 
-### Task 16: Update requirements traceability
+### Task 16: Update requirements traceability ✅
 
 **Files:**
 - Modify: `docs/requirements_traceability.md`
@@ -1164,7 +1164,7 @@ git commit -m "docs: trace phase 15a template rendering"
 
 ---
 
-### Task 17: Full PR 3 verification and PR creation
+### Task 17: Full PR 3 verification and PR creation ✅
 
 **Files:**
 - No new files expected.

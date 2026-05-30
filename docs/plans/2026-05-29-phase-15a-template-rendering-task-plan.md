@@ -88,7 +88,7 @@ The exact file layout can be adjusted during implementation if existing code pat
 
 Goal: establish the reusable foundation for template-driven rendering without changing Composer behavior yet.
 
-## Task 1: Add Template Loader and Validation
+## Task 1: Add Template Loader and Validation ✅
 
 **Purpose:** Load and validate the existing MVP YAML templates:
 
@@ -100,7 +100,7 @@ Goal: establish the reusable foundation for template-driven rendering without ch
 
 **Test focus:** valid templates load; missing required fields fail; unknown template names fail clearly.
 
-## Task 2: Add Render Contract Models
+## Task 2: Add Render Contract Models ✅
 
 **Purpose:** Define the internal render contracts shared by adapters and the render engine.
 
@@ -119,7 +119,7 @@ Suggested concepts:
 
 **Test focus:** contract serialization, default values, and validation behavior.
 
-## Task 3: Add Shared Rendering Primitives
+## Task 3: Add Shared Rendering Primitives ✅
 
 **Purpose:** Add reusable helpers for common visual instructions:
 
@@ -133,7 +133,7 @@ Suggested concepts:
 
 **Test focus:** generated primitive specs are deterministic and match expected positions/styles.
 
-## Task 4: Add Thumbnail/Card Asset Generator
+## Task 4: Add Thumbnail/Card Asset Generator ✅
 
 **Purpose:** Use Pillow to generate template-aware cards and thumbnails.
 
@@ -141,7 +141,7 @@ Suggested concepts:
 
 **Test focus:** generated image exists, has expected dimensions, and does not require external assets.
 
-## Task 5: Foundation Verification
+## Task 5: Foundation Verification ✅
 
 **Purpose:** Verify foundation behavior before template adapters are added.
 
@@ -159,7 +159,7 @@ Suggested concepts:
 
 Goal: implement all three MVP template adapters and prove each can produce deterministic offline render output through a standalone path.
 
-## Task 6: Implement News Card Adapter
+## Task 6: Implement News Card Adapter ✅
 
 **Purpose:** Convert script/research inputs into a News Card render plan.
 
@@ -173,7 +173,7 @@ Required behavior:
 
 **Best for:** short breaking update stories.
 
-## Task 7: Implement B-Roll Narration Adapter
+## Task 7: Implement B-Roll Narration Adapter ✅
 
 **Purpose:** Convert voiceover-led stories into a B-Roll Narration render plan.
 
@@ -187,7 +187,7 @@ Required behavior:
 
 **Best for:** explanation/context clips.
 
-## Task 8: Implement Rapid Update Adapter
+## Task 8: Implement Rapid Update Adapter ✅
 
 **Purpose:** Convert short viral/trending stories into a Rapid Update render plan.
 
@@ -201,7 +201,7 @@ Required behavior:
 
 **Best for:** trending gossip/viral updates.
 
-## Task 9: Add Standalone Renderer Path
+## Task 9: Add Standalone Renderer Path ✅
 
 **Purpose:** Add an offline renderer entry point that renders from deterministic local fixtures without running the whole pipeline.
 
@@ -209,7 +209,7 @@ Required behavior:
 
 **Implementation note:** Keep this path simple and internal; it is primarily for deterministic tests and future Composer integration.
 
-## Task 10: Adapter and Fixture Verification
+## Task 10: Adapter and Fixture Verification ✅
 
 **Purpose:** Prove all three templates work offline.
 
@@ -235,7 +235,7 @@ Suggested command:
 
 Goal: wire template rendering into the production Composer path and update documentation/traceability.
 
-## Task 11: Integrate Template Rendering into Composer
+## Task 11: Integrate Template Rendering into Composer ✅
 
 **Purpose:** Make Composer select/load the configured template and render through the Phase 15a rendering layer.
 
@@ -243,7 +243,7 @@ Goal: wire template rendering into the production Composer path and update docum
 
 **Safety note:** Preserve the existing fixed output package contract and Phase 14 validation behavior.
 
-## Task 12: Persist Template Diagnostics and Artifacts
+## Task 12: Persist Template Diagnostics and Artifacts ✅
 
 **Purpose:** Save template-rendering diagnostics in the job workspace.
 
@@ -258,7 +258,7 @@ Expected artifacts include:
 
 **Expected outcome:** Debug-first observability can explain template-rendering failures without adding Stage 2 UI scope.
 
-## Task 13: Update Final Output Package Metadata
+## Task 13: Update Final Output Package Metadata ✅
 
 **Purpose:** Ensure final package metadata records template information.
 
@@ -271,7 +271,7 @@ Expected additions may include:
 
 **Expected outcome:** Final package remains clean while metadata identifies the rendering template used.
 
-## Task 14: Update Relevant Docs
+## Task 14: Update Relevant Docs ✅
 
 **Purpose:** Update only docs that need Phase 15a implementation details after code is known.
 
@@ -284,7 +284,7 @@ Candidates:
 
 **Expected outcome:** Existing core docs remain aligned without duplicating this task plan.
 
-## Task 15: Add ADR for Template-Driven Rendering
+## Task 15: Add ADR for Template-Driven Rendering ✅
 
 **Purpose:** Record the architecture decision to use YAML templates plus FFmpeg/Pillow rendering primitives rather than a new rendering framework.
 
@@ -296,7 +296,7 @@ Use YAML-driven FFmpeg/Pillow template rendering for MVP videos.
 
 **Expected outcome:** Future contributors understand why Phase 15a avoided a new rendering framework.
 
-## Task 16: Update Requirements Traceability
+## Task 16: Update Requirements Traceability ✅
 
 **Purpose:** Map Phase 15a requirements to implementation and tests.
 
@@ -308,7 +308,7 @@ Expected mappings:
 - Composer integration tests
 - final output metadata/artifact tests
 
-## Task 17: Full Verification
+## Task 17: Full Verification ✅
 
 **Purpose:** Verify the full Phase 15a implementation before PR merge.
 
