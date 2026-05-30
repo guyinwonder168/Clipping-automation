@@ -643,3 +643,101 @@ class TestLLMPlanningIntegration:
 
         assert result["status"] == "completed"
         assert len(result["assets"]) == 1
+
+
+class TestCoverageGaps:
+    """Targeted tests for uncovered branches to reach ≥90% coverage."""
+
+    def test_compact_research_data_brief_not_found(self, tmp_path):
+        """Contract exists but brief file doesn't — except path covered."""
+        import json
+        agent = VisualDirectorAgent()
+        contract = {"video_sources": [], "context_sources": []}
+        contract_path = tmp_path / "research_contract.json"
+        contract_path.write_text(json.dumps(contract))
+
+        result = agent._compact_research_data(str(contract_path), "/nonexistent/brief.md")
+        assert result["video_sources"] == []
+        # brief_path FileNotFoundError caught, no research_brief key
+        assert "research_brief" not in result
+
+    def test_compact_research_data_empty_brief(self, tmp_path):
+        """Contract exists, brief exists but is whitespace-only."""
+        import json
+        agent = VisualDirectorAgent()
+        contract = {"video_sources": [], "context_sources": []}
+        contract_path = tmp_path / "research_contract.json"
+        contract_path.write_text(json.dumps(contract))
+        brief_path = tmp_path / "brief.md"
+        brief_path.write_text("   \n\n  ")
+
+        result = agent._compact_research_data(str(contract_path), str(brief_path))
+        assert "research_brief" not in result  # stripped to empty → falsy
+
+    def test_execute_action_empty_url_returns_none(self, mocker):
+        """tiktok_clip with empty source_url returns None."""
+        agent = VisualDirectorAgent()
+        mocker.patch("clipper_agency.agents.visual_director.YtDlpService")
+        result = agent._execute_action(
+            {"type": "tiktok_clip", "source_url": ""}, 1, "/tmp", mocker.MagicMock(), mocker.MagicMock(),
+        )
+        assert result is None
+
+    def test_execute_action_empty_query_returns_none(self, mocker):
+        """pexels_video with empty search_query returns None."""
+        agent = VisualDirectorAgent()
+        mocker.patch("clipper_agency.agents.visual_director.PexelsService")
+        result = agent._execute_action(
+            {"type": "pexels_video", "search_query": ""}, 1, "/tmp", mocker.MagicMock(), mocker.MagicMock(),
+        )
+        assert result is None
+
+    def test_execute_action_unknown_type_returns_none(self, mocker):
+        """Unknown action type returns None."""
+        agent = VisualDirectorAgent()
+        result = agent._execute_action(
+            {"type": "unknown_type"}, 1, "/tmp", mocker.MagicMock(), mocker.MagicMock(),
+        )
+        assert result is None
+
+    def test_execute_plan_both_fail_yields_none(self, mocker, tmp_path):
+        """Both action and fallback fail → source 'none'."""
+        agent = VisualDirectorAgent()
+        mocker.patch(
+            "clipper_agency.agents.visual_director.YtDlpService",
+        ).return_value.download.return_value = None
+        mocker.patch(
+            "clipper_agency.agents.visual_director.PexelsService",
+        ).return_value.search_videos.return_value = []
+
+        plan = [{
+            "scene_number": 1,
+            "action": {"type": "tiktok_clip", "source_url": "https://tiktok.com/v/1"},
+            "fallback": {"type": "pexels_video", "search_query": "drama"},
+        }]
+        result = agent._execute_plan(plan, str(tmp_path))
+        assert result[0]["source"] == "none"
+        assert result[0]["path"] == ""
+
+    def test_fetch_image_no_results(self, mocker, tmp_path):
+        """_fetch_image returns None when Pexels has no results."""
+        agent = VisualDirectorAgent()
+        mock_pexels = mocker.MagicMock()
+        mock_pexels.search_photos.return_value = []
+        result = agent._fetch_image("obscure query", 1, str(tmp_path), mock_pexels)
+        assert result is None
+
+    def test_fetch_image_download_fails(self, mocker, tmp_path):
+        """_fetch_image returns None when image download fails."""
+        agent = VisualDirectorAgent()
+        mock_pexels = mocker.MagicMock()
+        mock_pexels.search_photos.return_value = [
+            {"id": 1, "src": {"medium": "https://images.pexels.com/broken.jpg"}},
+        ]
+        with patch("httpx.Client") as MockClient:
+            mock_client = mocker.MagicMock()
+            mock_client.get.side_effect = Exception("network error")
+            MockClient.return_value.__enter__ = lambda s: mock_client
+            MockClient.return_value.__exit__ = mocker.MagicMock(return_value=False)
+            result = agent._fetch_image("query", 1, str(tmp_path), mock_pexels)
+            assert result is None
